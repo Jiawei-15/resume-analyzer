@@ -113,4 +113,3 @@ Clone the repository:
 ```bash
 git clone https://github.com/Jiawei-15/resume-analyzer.git
 cd resume-analyzer
->>>>>>> a05d5ebc6083bd6a7979988ff15f771202d6df6c
