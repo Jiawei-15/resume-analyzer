@@ -113,3 +113,53 @@ Clone the repository:
 ```bash
 git clone https://github.com/Jiawei-15/resume-analyzer.git
 cd resume-analyzer
+
+## Project Structure
+
+```text
+resume-analyzer/
+├── app/
+│   ├── main.py
+│   ├── skills.py
+│   └── utils.py
+├── assets/
+│   ├── match-input.png
+│   └── match-output.png
+├── .gitignore
+├── README.md
+└── requirements.txt
+
+
+---
+
+## API Overview
+
+```markdown id="k4v23g"
+## API Overview
+
+### POST /upload
+Uploads a PDF resume file.
+
+### POST /analyze
+Extracts resume text and identifies technical skills.
+
+### POST /match
+Compares resume skills against a job description and returns:
+- match score
+- matched skills
+- missing skills
+- feedback suggestions
+
+## Current Limitations
+
+- Skill extraction is keyword-based and not context-aware
+- Match scoring does not yet include weighting or semantic similarity
+- PDF parsing quality depends on resume formatting
+
+## Future Improvements
+
+- Semantic skill matching using embeddings or LLMs
+- Weighted scoring system
+- Frontend interface
+- Resume section analysis
+- Deployment as a public web application
