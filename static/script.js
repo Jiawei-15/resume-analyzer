@@ -4,7 +4,7 @@ const resultBox = document.getElementById("result");
 form.addEventListener("submit", async (e) => {
     e.preventDefault();
 
-    resultBox.innerHTML = "Analyzing...";
+    resultBox.innerHTML = `<div class="loading">Analyzing resume...</div>`;
 
     const fileInput = document.getElementById("resume");
     const jobDescription = document.getElementById("job-description").value;
@@ -31,34 +31,46 @@ form.addEventListener("submit", async (e) => {
         }
 
         const data = result.data;
+        const scorePercent = Math.round(data.match_score * 100);
 
         resultBox.innerHTML = `
             <div class="result-card">
-                <h2>Analysis Result</h2>
+                <div class="result-header">
+                    <div>
+                        <h2>Analysis Result</h2>
+                        <p class="file-name">${data.filename}</p>
+                    </div>
+                    <div class="score-badge">${scorePercent}%</div>
+                </div>
 
-                <p><strong>File:</strong> ${data.filename}</p>
+                <div class="score-bar">
+                    <div class="score-fill" style="width: ${scorePercent}%"></div>
+                </div>
 
-                <p>
-                    <strong>Match Score:</strong>
-                    ${(data.match_score * 100).toFixed(0)}%
-                </p>
+                <p class="score-text">${data.score_explanation}</p>
 
-                <p><strong>Score Explanation:</strong> ${data.score_explanation}</p>
+                <div class="result-grid">
+                    <div class="result-section">
+                        <h3>Matched Skills</h3>
+                        <ul>
+                            ${renderList(data.matched_skills, "No matched skills found.")}
+                        </ul>
+                    </div>
 
-                <h3>Matched Skills</h3>
-                <ul>
-                    ${renderList(data.matched_skills, "No matched skills found.")}
-                </ul>
+                    <div class="result-section">
+                        <h3>Missing Skills</h3>
+                        <ul>
+                            ${renderList(data.missing_skills, "No missing skills found.")}
+                        </ul>
+                    </div>
+                </div>
 
-                <h3>Missing Skills</h3>
-                <ul>
-                    ${renderList(data.missing_skills, "No missing skills found.")}
-                </ul>
-
-                <h3>Feedback</h3>
-                <ul>
-                    ${renderList(data.feedback, "No major feedback needed.")}
-                </ul>
+                <div class="result-section feedback-section">
+                    <h3>Feedback</h3>
+                    <ul>
+                        ${renderList(data.feedback, "No major feedback needed.")}
+                    </ul>
+                </div>
             </div>
         `;
 
