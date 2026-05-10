@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Resume Analyzer</title>
+
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+    <div class="container">
+
+        <h1>AI Resume Analyzer</h1>
+
+        <p class="subtitle">
+            Upload a resume and compare it with a job description.
+        </p>
+
+        <form id="match-form">
+
+            <input
+                type="file"
+                id="resume"
+                accept=".pdf"
+                required
+            >
+
+            <textarea
+                id="job-description"
+                placeholder="Paste job description here..."
+                required
+            ></textarea>
+
+            <button type="submit">
+                Analyze Resume
+            </button>
+
+        </form>
+
+        <div id="result"></div>
+
+    </div>
+
+    <script src="/static/script.js"></script>
+
+</body>
+</html>
