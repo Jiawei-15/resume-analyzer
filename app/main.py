@@ -1,26 +1,33 @@
 import logging
+from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from fastapi.requests import Request
 
 from app.routers.resume import router as resume_router
 
 logging.basicConfig(level=logging.INFO)
 
+BASE_DIR = Path(__file__).resolve().parent.parent
+
 app = FastAPI(title="AI Resume Analyzer API")
 
 app.include_router(resume_router)
 
-app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount(
+    "/static",
+    StaticFiles(directory=BASE_DIR / "static"),
+    name="static"
+)
 
-templates = Jinja2Templates(directory="templates")
+templates = Jinja2Templates(directory=BASE_DIR / "templates")
 
 
 @app.get("/", tags=["System"])
 def home(request: Request):
     return templates.TemplateResponse(
-        "index.html",
-        {"request": request}
+        request=request,
+        name="index.html",
+        context={}
     )
