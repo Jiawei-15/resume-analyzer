@@ -1,165 +1,140 @@
-
 # AI Resume Analyzer
 
-A FastAPI-based backend project that analyzes PDF resumes against job descriptions and returns structured feedback.
+A full-stack resume analysis web application built with FastAPI, Python, HTML, CSS, and JavaScript.
+
+The system analyzes a resume PDF, extracts technical skills, compares them with a target job description, and generates structured feedback on skill alignment and missing keywords.
 
 ---
 
-## Features
+# Features
 
-- PDF resume parsing
-- Skill extraction
-- Job description matching
-- Match score generation
-- Missing skill analysis
-- Resume improvement feedback
-
----
-
-## Demo
-
-### Match Endpoint Input
-
-![Match Input](./assets/match-input.png)
-
-### Sample Match Result
-
-![Match Output](./assets/match-output.png)
+- Upload PDF resumes
+- Extract resume text automatically
+- Detect technical skills from resumes
+- Compare resumes with job descriptions
+- Match score calculation
+- Missing skills detection
+- Structured improvement feedback
+- Frontend + backend integration
+- REST API architecture with FastAPI
+- Modular backend structure
+- Logging and validation support
 
 ---
 
-## Tech Stack
+# Tech Stack
 
+## Backend
 - Python
 - FastAPI
+- Uvicorn
+
+## Frontend
+- HTML
+- CSS
+- JavaScript
+
+## Other Tools
+- Git
+- GitHub
+- Jinja2
 - pypdf
-- Regex-based text processing
 
 ---
 
-## Run Locally
-
-```bash
-uvicorn app.main:app --reload
-=======
-# Resume Analyzer
-
-A practical Python project that compares a resume against a job description and returns structured feedback on keyword alignment, skill coverage, and weak points.
-
-This project was built as a useful job-search tool rather than a classroom-only demo. The main idea is simple: instead of reading a resume as just a block of text, the system breaks it down, compares it with a target role, and highlights where the resume is strong and where it may be missing important signals.
-
-## What it does
-
-- reads resume text and job description text
-- preprocesses and cleans the text
-- identifies important keywords and skill-related terms
-- compares overlap between the resume and the target role
-- returns structured feedback on:
-  - keyword alignment
-  - skill coverage
-  - weak or missing areas
-  - overall match quality
-
-## Why I built it
-
-I wanted to build something more practical than a standard class project. Resume screening is a real-world problem, and it gave me a way to work on applied AI and text processing while still building something that feels useful.
-
-I also wanted the project to be readable and easy to improve. Instead of overcomplicating the design early, I focused on clear output, simple comparison logic, and a workflow that can be tested and refined over time.
-
-## Tech stack
-
-- Python
-- NLP / text processing
-- keyword extraction and matching
-- structured comparison logic
-- iterative testing and improvement
-
-## Project goals
-
-This project focuses on:
-
-- useful output instead of just technical experimentation
-- clear comparison between a resume and a target role
-- readable feedback that points out strengths and weak areas
-- building applied AI skills through a practical use case
-
-## How it works
-
-The general pipeline is:
-
-1. load resume content and job description content
-2. clean and normalize the text
-3. extract relevant terms, keywords, and skills
-4. compare the two sides for overlap and gaps
-5. generate structured feedback based on the comparison
-
-The result is not meant to replace a recruiter. It is meant to provide a more organized way to review resume-job fit and spot possible weaknesses before applying.
-
-## Skills demonstrated
-
-This project demonstrates:
-
-- Python project development
-- applied AI in a practical workflow
-- NLP and text preprocessing
-- comparing unstructured text in a structured way
-- turning technical logic into output that is actually usable
-- improving a project through testing and iteration
-
-## Running the project
-
-Clone the repository:
-
-```bash
-git clone https://github.com/Jiawei-15/resume-analyzer.git
-cd resume-analyzer
-
-## Project Structure
+# Project Structure
 
 ```text
 resume-analyzer/
+│
 ├── app/
-│   ├── main.py
+│   ├── routers/
+│   ├── services/
+│   ├── schemas/
 │   ├── skills.py
-│   └── utils.py
+│   ├── utils.py
+│   └── main.py
+│
+├── static/
+├── templates/
 ├── assets/
-│   ├── match-input.png
-│   └── match-output.png
-├── .gitignore
-├── README.md
-└── requirements.txt
-
+├── requirements.txt
+├── render.yaml
+└── README.md
+```
 
 ---
 
-## API Overview
+# Screenshots
 
-```markdown id="k4v23g"
-## API Overview
+## Homepage
 
-### POST /upload
-Uploads a PDF resume file.
+![Homepage](assets/homepage.png)
 
-### POST /analyze
-Extracts resume text and identifies technical skills.
+---
 
-### POST /match
-Compares resume skills against a job description and returns:
-- match score
-- matched skills
-- missing skills
-- feedback suggestions
+## Analysis Results
 
-## Current Limitations
+![Results](assets/results.png)
 
-- Skill extraction is keyword-based and not context-aware
-- Match scoring does not yet include weighting or semantic similarity
-- PDF parsing quality depends on resume formatting
+---
 
-## Future Improvements
+# How It Works
 
-- Semantic skill matching using embeddings or LLMs
-- Weighted scoring system
-- Frontend interface
-- Resume section analysis
-- Deployment as a public web application
+1. User uploads a PDF resume
+2. Backend extracts text from the PDF
+3. Resume skills are identified
+4. Skills are compared against a job description
+5. Match score and feedback are generated
+6. Results are displayed in the frontend UI
+
+---
+
+# Run Locally
+
+## Clone repository
+
+```bash
+git clone https://github.com/Jiawei-15/resume-analyzer.git
+```
+
+---
+
+## Install dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+---
+
+## Start server
+
+```bash
+uvicorn app.main:app --reload
+```
+
+---
+
+## Open browser
+
+```text
+http://127.0.0.1:8000
+```
+
+---
+
+# Future Improvements
+
+- Semantic similarity matching
+- OpenAI integration
+- Better NLP ranking
+- Resume recommendations
+- Deployment to Render
+- Database support
+
+---
+
+# Author
+
+Built as a portfolio backend/full-stack project focused on resume analysis and API architecture.
