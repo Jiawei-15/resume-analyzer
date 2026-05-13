@@ -1,3 +1,5 @@
+from app.weights import SKILL_WEIGHTS
+from app.normalization import NORMALIZATION_MAP
 from io import BytesIO
 import re
 from pypdf import PdfReader
@@ -15,12 +17,6 @@ def extract_text_from_pdf(file_bytes: bytes) -> str:
             extracted_text += page_text + "\n"
 
     return extracted_text
-
-
-def normalize_text(text: str) -> str:
-    text = text.lower()
-    text = re.sub(r"\s+", " ", text)
-    return text
 
 
 def extract_skills(text: str) -> list:
@@ -60,8 +56,21 @@ def match_job(resume_skills: list, job_text: str) -> dict:
             else:
                 missing.append(skill)
 
-    total = len(matched) + len(missing)
-    score = len(matched) / total if total > 0 else 0
+    matched_weight = 0
+    missing_weight = 0
+
+    for skill in matched:
+        matched_weight += SKILL_WEIGHTS.get(skill, 1)
+
+    for skill in missing:
+        missing_weight += SKILL_WEIGHTS.get(skill, 1)
+
+    total_weight = matched_weight + missing_weight
+
+    score = (
+        matched_weight / total_weight
+        if total_weight > 0 else 0
+    )
 
     return {
         "match_score": round(score, 2),
@@ -73,25 +82,45 @@ def match_job(resume_skills: list, job_text: str) -> dict:
 def generate_feedback(missing_skills: list) -> list:
     feedback = []
 
-    for skill in missing_skills:
-        if skill == "fastapi":
-            feedback.append("Add FastAPI to your skills or project descriptions if you have used it.")
-        elif skill == "docker":
-            feedback.append("Mention Docker experience in a project section if you have used it.")
-        elif skill == "linux":
-            feedback.append("Show Linux usage through development, scripting, or deployment work.")
-        elif skill == "rest api":
-            feedback.append("Describe any API-related coursework or projects more explicitly.")
-        elif skill == "sql":
-            feedback.append("Highlight database work or SQL usage in projects.")
-        elif skill == "machine learning":
-            feedback.append("Include machine learning models, tools, or related coursework in more detail.")
-        elif skill == "pandas":
-            feedback.append("Add evidence of pandas use if it is relevant to your background.")
-        elif skill == "data analysis":
-            feedback.append("Make data analysis work more explicit through project descriptions or coursework.")
-        else:
-            feedback.append(f"Consider adding evidence of {skill} if it is relevant to your background.")
+    if "fastapi" in missing_skills:
+        feedback.append(
+            "Consider adding FastAPI project experience or backend API development examples."
+        )
+
+    if "docker" in missing_skills:
+        feedback.append(
+            "Docker knowledge is commonly expected for deployment-focused backend roles."
+        )
+
+    if "machine learning" in missing_skills:
+        feedback.append(
+            "Add machine learning coursework, projects, or model development experience."
+        )
+
+    if "backend" in missing_skills:
+        feedback.append(
+            "Demonstrate backend engineering experience through APIs, databases, or deployment work."
+        )
+
+    if "frontend" in missing_skills:
+        feedback.append(
+            "Consider including frontend frameworks or UI project experience."
+        )
+
+    if "sql" in missing_skills:
+        feedback.append(
+            "Database and SQL skills are frequently required for backend positions."
+        )
+
+    if "react" in missing_skills:
+        feedback.append(
+            "Adding React or frontend framework experience may improve full-stack role alignment."
+        )
+
+    if not feedback:
+        feedback.append(
+            "Your resume aligns well with the target role requirements."
+        )
 
     return feedback
 
@@ -105,3 +134,12 @@ def explain_score(score: float) -> str:
         return "Partial match. Several important skills are missing."
     else:
         return "Weak match for this role."
+    
+    
+def normalize_text(text: str) -> str:
+    text = text.lower()
+
+    for old, new in NORMALIZATION_MAP.items():
+        text = text.replace(old, new)
+
+    return text

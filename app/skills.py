@@ -14,8 +14,11 @@ SKILLS_DB = [
     "flask",
     "django",
     "react",
-    "node.js",
+    "nodejs",
     "rest api",
+    "backend",
+    "frontend",
+
 
     # Data / ML
     "pandas",
@@ -38,8 +41,8 @@ SKILLS_DB = [
     "vscode",
 
     # Graphics / Robotics / Simulation
-    "three.js",
-    "chart.js",
+    "threejs",
+    "chartjs",
     "robotics",
     "simulation",
     "yaml",
