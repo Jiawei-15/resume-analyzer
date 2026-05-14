@@ -32,6 +32,7 @@ form.addEventListener("submit", async (e) => {
 
         const data = result.data;
         const scorePercent = Math.round(data.match_score * 100);
+        const semanticPercent = Math.round((data.semantic_score || 0) * 100);
 
         resultBox.innerHTML = `
             <div class="result-card">
@@ -48,6 +49,8 @@ form.addEventListener("submit", async (e) => {
                 </div>
 
                 <p class="score-text">${data.score_explanation}</p>
+
+                <p><strong>Semantic Score:</strong> ${semanticPercent}%</p>
 
                 <div class="result-grid">
                     <div class="result-section">

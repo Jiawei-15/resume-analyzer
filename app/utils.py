@@ -1,3 +1,4 @@
+from app.semantic import semantic_match
 from app.weights import SKILL_WEIGHTS
 from app.normalization import NORMALIZATION_MAP
 from io import BytesIO
@@ -72,12 +73,17 @@ def match_job(resume_skills: list, job_text: str) -> dict:
         if total_weight > 0 else 0
     )
 
+    semantic_score = semantic_match(
+        " ".join(resume_skills),
+        job_text
+    )
+
     return {
         "match_score": round(score, 2),
+        "semantic_score": semantic_score,
         "matched_skills": sorted(matched),
         "missing_skills": sorted(missing)
     }
-
 
 def generate_feedback(missing_skills: list) -> list:
     feedback = []
