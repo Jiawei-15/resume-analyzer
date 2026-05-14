@@ -26,6 +26,14 @@ The system analyzes a resume PDF, extracts technical skills, compares them with 
 
 ---
 
+## Recent Improvements
+
+- Added skill normalization for aliases such as JS, ML, RESTful APIs, and Fast API
+- Added weighted scoring for more realistic resume ranking
+- Added phrase-level matching for AI models and backend systems
+- Improved feedback generation for missing technical skills
+- Added semantic-style preprocessing for resume and job description text
+
 # Tech Stack
 
 ## Backend
@@ -127,6 +135,12 @@ http://127.0.0.1:8000
 ```
 
 ---
+
+## Run with Docker
+
+```bash
+docker build -t resume-analyzer .
+docker run -p 10000:10000 resume-analyzer
 
 # Future Improvements
 
