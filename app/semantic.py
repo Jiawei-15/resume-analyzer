@@ -63,3 +63,8 @@ def semantic_match(resume_text: str, job_text: str) -> float:
         resume_text,
         job_text
     )
+
+def get_semantic_source() -> str:
+    if USE_OPENAI_EMBEDDINGS and OPENAI_API_KEY:
+        return "openai"
+    return "basic"

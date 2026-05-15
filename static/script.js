@@ -52,6 +52,8 @@ form.addEventListener("submit", async (e) => {
 
                 <p><strong>Semantic Score:</strong> ${semanticPercent}%</p>
 
+                <p><strong>Semantic Source:</strong> ${data.semantic_source}</p>
+
                 <div class="result-grid">
                     <div class="result-section">
                         <h3>Matched Skills</h3>

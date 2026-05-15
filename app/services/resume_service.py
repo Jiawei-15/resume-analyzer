@@ -86,6 +86,7 @@ def match_resume_logic(file, content, job_description):
         "resume_skills": skills,
         "match_score": result["match_score"],
         "semantic_score": result["semantic_score"],
+        "semantic_source": result["semantic_source"],
         "matched_skills": result["matched_skills"],
         "missing_skills": result["missing_skills"],
         "score_explanation": explain_score(result["match_score"]),
