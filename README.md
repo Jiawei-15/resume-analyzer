@@ -23,6 +23,9 @@ The system analyzes a resume PDF, extracts technical skills, compares them with 
 - REST API architecture with FastAPI
 - Modular backend structure
 - Logging and validation support
+- Optional OpenAI embedding-based semantic scoring
+- Local fallback semantic scoring when OpenAI API is unavailable
+- Semantic source display in frontend results
 
 ---
 
@@ -40,6 +43,8 @@ The system analyzes a resume PDF, extracts technical skills, compares them with 
 - Python
 - FastAPI
 - Uvicorn
+- OpenAI API
+- python-dotenv
 
 ## Frontend
 - HTML
@@ -74,6 +79,31 @@ resume-analyzer/
 ├── render.yaml
 └── README.md
 ```
+
+---
+
+
+## Semantic Matching
+
+This project supports two semantic scoring modes:
+
+1. **OpenAI Embeddings**
+   - Uses OpenAI embeddings when `OPENAI_API_KEY` is available and `USE_OPENAI_EMBEDDINGS=True`
+
+2. **Basic Local Fallback**
+   - Uses a lightweight local fallback when OpenAI credentials are missing or disabled
+
+This keeps the project usable both with and without external AI services.
+
+---
+
+## Environment Variables
+
+Create a local `.env` file based on `.env.example`:
+
+```env
+OPENAI_API_KEY=your_api_key_here
+USE_OPENAI_EMBEDDINGS=True
 
 ---
 
