@@ -9,3 +9,4 @@ python-dotenv
 openai
 scikit-learn
 python-docx
+Pillow
