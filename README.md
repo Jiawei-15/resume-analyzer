@@ -2,48 +2,44 @@
 
 https://resume-analyzer-6pdw.onrender.com
 
+![CI](https://github.com/Jiawei-15/resume-analyzer/actions/workflows/ci.yml/badge.svg)
+
+---
+
 # AI Resume Analyzer
 
 A full-stack resume analysis web application built with FastAPI, Python, HTML, CSS, and JavaScript.
 
-The system analyzes a resume PDF, extracts technical skills, compares them with a target job description, and generates structured feedback on skill alignment and missing keywords.
+The system analyzes a resume (PDF, DOCX, TXT, or image), extracts technical skills, compares them with a target job description, generates structured feedback on skill alignment and missing keywords, and persists analysis history to a local SQLite database.
 
 ---
 
 # Features
 
-- Upload PDF resumes
-- Extract resume text automatically
-- Detect technical skills from resumes
-- Compare resumes with job descriptions
-- Match score calculation
-- Missing skills detection
-- Structured improvement feedback
+- Upload PDF, DOCX, TXT, PNG, JPG, and JPEG resumes
+- Automatic text extraction including OCR for image-based resumes
+- Technical skill detection with alias normalization (JS → JavaScript, ML → machine learning, etc.)
+- Weighted skill matching — core skills contribute more to the match score than peripheral ones
+- Two-mode semantic scoring: OpenAI embeddings when available, TF-IDF cosine similarity as local fallback
+- Skill-level feedback — every missing skill generates a specific, actionable suggestion
+- Analysis history persisted to SQLite with a `/history` REST endpoint
 - Frontend + backend integration
 - REST API architecture with FastAPI
 - Modular backend structure
 - Logging and validation support
-- Optional OpenAI embedding-based semantic scoring
-- Local fallback semantic scoring when OpenAI API is unavailable
-- Semantic source display in frontend results
 
 ---
-
-## Recent Improvements
-
-- Added skill normalization for aliases such as JS, ML, RESTful APIs, and Fast API
-- Added weighted scoring for more realistic resume ranking
-- Added phrase-level matching for AI models and backend systems
-- Improved feedback generation for missing technical skills
-- Added semantic-style preprocessing for resume and job description text
 
 # Tech Stack
 
 ## Backend
-- Python
+- Python 3.11
 - FastAPI
 - Uvicorn
-- OpenAI API
+- SQLite
+- scikit-learn (TF-IDF semantic matching)
+- OpenAI API (optional)
+- pypdf, python-docx, Pillow, pytesseract
 - python-dotenv
 
 ## Frontend
@@ -52,10 +48,11 @@ The system analyzes a resume PDF, extracts technical skills, compares them with 
 - JavaScript
 
 ## Other Tools
-- Git
-- GitHub
+- Git / GitHub
 - Jinja2
-- pypdf
+- Docker
+- GitHub Actions (CI)
+- Render (deployment)
 
 ---
 
@@ -66,15 +63,31 @@ resume-analyzer/
 │
 ├── app/
 │   ├── routers/
+│   │   └── resume.py         # API endpoints
 │   ├── services/
+│   │   └── resume_service.py # Business logic
 │   ├── schemas/
-│   ├── skills.py
-│   ├── utils.py
-│   └── main.py
+│   │   └── responses.py      # Pydantic response models
+│   ├── config.py             # Environment variable loading
+│   ├── database.py           # SQLite init, save, query
+│   ├── normalization.py      # Skill alias mapping
+│   ├── semantic.py           # TF-IDF and OpenAI semantic matching
+│   ├── skills.py             # Master skill list
+│   ├── utils.py              # Text extraction, matching, feedback
+│   ├── weights.py            # Skill importance weights
+│   └── main.py               # FastAPI app entry point
+│
+├── tests/
+│   ├── test_basic.py         # API endpoint tests
+│   └── test_utils.py         # Unit tests for core logic
 │
 ├── static/
 ├── templates/
 ├── assets/
+├── .github/
+│   └── workflows/
+│       └── ci.yml
+├── Dockerfile
 ├── requirements.txt
 ├── render.yaml
 └── README.md
@@ -82,18 +95,28 @@ resume-analyzer/
 
 ---
 
-
 ## Semantic Matching
 
 This project supports two semantic scoring modes:
 
 1. **OpenAI Embeddings**
-   - Uses OpenAI embeddings when `OPENAI_API_KEY` is available and `USE_OPENAI_EMBEDDINGS=True`
+   - Uses OpenAI `text-embedding-3-small` when `OPENAI_API_KEY` is available and `USE_OPENAI_EMBEDDINGS=True`
 
-2. **Basic Local Fallback**
-   - Uses a lightweight local fallback when OpenAI credentials are missing or disabled
+2. **TF-IDF Local Fallback**
+   - Uses scikit-learn TF-IDF cosine similarity when OpenAI credentials are missing or disabled
+   - No external API required — works fully offline
 
-This keeps the project usable both with and without external AI services.
+Both modes return a `semantic_score` and `semantic_source` field in the API response.
+
+---
+
+## Analysis History
+
+Every `/match` request is saved to a local SQLite database. The `/history` endpoint returns the 20 most recent analyses with full skill breakdowns and feedback.
+
+```bash
+GET /history
+```
 
 ---
 
@@ -104,31 +127,23 @@ Create a local `.env` file based on `.env.example`:
 ```env
 OPENAI_API_KEY=your_api_key_here
 USE_OPENAI_EMBEDDINGS=True
+```
 
----
-
-# Screenshots
-
-## Homepage
-
-![Homepage](assets/homepage.png)
-
----
-
-## Analysis Results
-
-![Results](assets/results.png)
+The application runs without an OpenAI key — TF-IDF scoring activates automatically.
 
 ---
 
 # How It Works
 
-1. User uploads a PDF resume
-2. Backend extracts text from the PDF
-3. Resume skills are identified
-4. Skills are compared against a job description
-5. Match score and feedback are generated
-6. Results are displayed in the frontend UI
+1. User uploads a resume file (PDF, DOCX, TXT, or image)
+2. Backend extracts text — OCR is used for image files
+3. Skill aliases are normalized (e.g. "RESTful APIs" → "rest api")
+4. Technical skills are matched against a master skill list
+5. Matched and missing skills are compared against the job description
+6. Weighted match score and semantic score are calculated
+7. Per-skill feedback is generated for every missing skill
+8. Analysis is saved to SQLite history
+9. Results are returned to the frontend
 
 ---
 
@@ -140,15 +155,11 @@ USE_OPENAI_EMBEDDINGS=True
 git clone https://github.com/Jiawei-15/resume-analyzer.git
 ```
 
----
-
 ## Install dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
-
----
 
 ## Start server
 
@@ -156,30 +167,24 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
 
----
-
 ## Open browser
 
 ```text
 http://127.0.0.1:8000
 ```
 
----
+## Run tests
+
+```bash
+pytest tests/ -v
+```
 
 ## Run with Docker
 
 ```bash
 docker build -t resume-analyzer .
 docker run -p 10000:10000 resume-analyzer
-
-# Future Improvements
-
-- Semantic similarity matching
-- OpenAI integration
-- Better NLP ranking
-- Resume recommendations
-- Deployment to Render
-- Database support
+```
 
 ---
 
