@@ -21,7 +21,6 @@ NORMALIZATION_MAP = {
     "ml": "machine learning",
 
     "js": "javascript",
-    "py": "python",
 
     "react.js": "react",
     "reactjs": "react",

@@ -1,11 +1,15 @@
 from app.semantic import semantic_match, get_semantic_source
 from app.weights import SKILL_WEIGHTS
 from app.normalization import NORMALIZATION_MAP
+from app.skills import SKILLS_DB
+
 from io import BytesIO
 import re
-from pypdf import PdfReader
 
-from app.skills import SKILLS_DB
+from pypdf import PdfReader
+from docx import Document
+from PIL import Image
+import pytesseract
 
 
 def extract_text_from_pdf(file_bytes: bytes) -> str:
@@ -18,6 +22,47 @@ def extract_text_from_pdf(file_bytes: bytes) -> str:
             extracted_text += page_text + "\n"
 
     return extracted_text
+
+
+def extract_text_from_docx(file_bytes: bytes) -> str:
+    document = Document(BytesIO(file_bytes))
+    paragraphs = []
+
+    for paragraph in document.paragraphs:
+        text = paragraph.text.strip()
+        if text:
+            paragraphs.append(text)
+
+    return "\n".join(paragraphs)
+
+
+def extract_text_from_txt(file_bytes: bytes) -> str:
+    try:
+        return file_bytes.decode("utf-8")
+    except UnicodeDecodeError:
+        return file_bytes.decode("latin-1")
+
+
+def extract_text_from_image(file_bytes: bytes) -> str:
+    image = Image.open(BytesIO(file_bytes))
+
+    try:
+        text = pytesseract.image_to_string(image)
+    except pytesseract.TesseractNotFoundError:
+        raise RuntimeError(
+            "Tesseract OCR is not installed or not available in PATH."
+        )
+
+    return text
+
+
+def normalize_text(text: str) -> str:
+    text = text.lower()
+
+    for old, new in NORMALIZATION_MAP.items():
+        text = text.replace(old, new)
+
+    return text
 
 
 def extract_skills(text: str) -> list:
@@ -37,7 +82,7 @@ def extract_skills(text: str) -> list:
     return sorted(list(set(found_skills)))
 
 
-def match_job(resume_skills: list, job_text: str) -> dict:
+def match_job(resume_text: str, resume_skills: list, job_text: str) -> dict:
     normalized_job_text = normalize_text(job_text)
 
     matched = []
@@ -74,7 +119,7 @@ def match_job(resume_skills: list, job_text: str) -> dict:
     )
 
     semantic_score = semantic_match(
-        " ".join(resume_skills),
+        resume_text,
         job_text
     )
 
@@ -86,48 +131,67 @@ def match_job(resume_skills: list, job_text: str) -> dict:
         "missing_skills": sorted(missing)
     }
 
+
+SKILL_FEEDBACK = {
+    "python": "Add Python projects that show real usage, not just listed as a skill.",
+    "fastapi": "Consider adding FastAPI project experience or backend API development examples.",
+    "docker": "Docker is commonly expected for backend and deployment roles.",
+    "machine learning": "Add ML coursework, projects, or model development experience.",
+    "sql": "Database and SQL skills are frequently required for backend positions.",
+    "react": "React experience improves full-stack role alignment.",
+    "javascript": "JavaScript is core for frontend and full-stack roles.",
+    "typescript": "TypeScript is increasingly expected in production frontend codebases.",
+    "nodejs": "Node.js experience strengthens backend and full-stack profiles.",
+    "rest api": "Add REST API design or consumption experience to your projects.",
+    "git": "Make sure version control usage is visible in your project descriptions.",
+    "github": "Link your GitHub profile and ensure repositories are active and documented.",
+    "html": "Include frontend projects that demonstrate real HTML/CSS usage.",
+    "css": "Include frontend projects that demonstrate real HTML/CSS usage.",
+    "pandas": "Add data analysis projects using pandas to demonstrate practical data skills.",
+    "numpy": "NumPy experience is expected for data and ML roles.",
+    "scikit-learn": "Add a project that uses scikit-learn for a real prediction or classification task.",
+    "tensorflow": "TensorFlow experience is valued for deep learning roles.",
+    "pytorch": "PyTorch is widely used in research and production ML roles.",
+    "deep learning": "Add deep learning project experience with real datasets.",
+    "data analysis": "Include a project with end-to-end data analysis and visualization.",
+    "backend": "Demonstrate backend engineering through APIs, databases, or deployment work.",
+    "frontend": "Include frontend framework or UI project experience.",
+    "linux": "Familiarity with Linux is expected for most backend and DevOps roles.",
+    "jupyter": "Jupyter notebook experience supports data science and ML roles.",
+    "opencv": "Add a computer vision project using OpenCV.",
+    "robotics": "Include robotics project experience with real hardware or simulation.",
+    "simulation": "Add simulation project work to demonstrate systems thinking.",
+    "java": "Include Java projects, especially if applying to enterprise or Android roles.",
+    "c++": "C++ experience is valued for systems programming, robotics, and performance-critical roles.",
+    "typescript": "TypeScript is increasingly expected in production frontend codebases.",
+    "flask": "Add a Flask web application or API project to your portfolio.",
+    "django": "Django experience is valued for full-featured backend web development roles.",
+    "numpy": "NumPy experience is expected for data and ML roles.",
+    "pytorch": "PyTorch is widely used in research and production ML roles.",
+    "regression": "Include a project that applies regression modeling to a real dataset.",
+    "cross-validation": "Show model evaluation skills by documenting cross-validation in your ML projects.",
+    "threejs": "Add a 3D visualization or WebGL project using Three.js.",
+    "chartjs": "Include a data visualization project using Chart.js.",
+    "yaml": "YAML is commonly used in DevOps and configuration management; show it in project setup files.",
+    "verilog": "Include digital design or FPGA projects using Verilog.",
+    "assembly": "Add low-level programming or embedded systems experience using Assembly.",
+    "arm": "ARM architecture experience is valued for embedded and systems roles.",
+    "oop": "Demonstrate object-oriented design through well-structured project code.",
+    "graph search": "Include algorithm projects that implement graph search techniques.",
+    "recursion": "Show algorithmic thinking through projects or problems that use recursion.",
+}
+
+DEFAULT_FEEDBACK = "Consider adding real project experience with {skill} to strengthen your profile."
+
+
 def generate_feedback(missing_skills: list) -> list:
+    if not missing_skills:
+        return ["Your resume aligns well with the target role requirements."]
+
     feedback = []
-
-    if "fastapi" in missing_skills:
-        feedback.append(
-            "Consider adding FastAPI project experience or backend API development examples."
-        )
-
-    if "docker" in missing_skills:
-        feedback.append(
-            "Docker knowledge is commonly expected for deployment-focused backend roles."
-        )
-
-    if "machine learning" in missing_skills:
-        feedback.append(
-            "Add machine learning coursework, projects, or model development experience."
-        )
-
-    if "backend" in missing_skills:
-        feedback.append(
-            "Demonstrate backend engineering experience through APIs, databases, or deployment work."
-        )
-
-    if "frontend" in missing_skills:
-        feedback.append(
-            "Consider including frontend frameworks or UI project experience."
-        )
-
-    if "sql" in missing_skills:
-        feedback.append(
-            "Database and SQL skills are frequently required for backend positions."
-        )
-
-    if "react" in missing_skills:
-        feedback.append(
-            "Adding React or frontend framework experience may improve full-stack role alignment."
-        )
-
-    if not feedback:
-        feedback.append(
-            "Your resume aligns well with the target role requirements."
-        )
+    for skill in missing_skills:
+        msg = SKILL_FEEDBACK.get(skill, DEFAULT_FEEDBACK.format(skill=skill))
+        feedback.append(msg)
 
     return feedback
 
@@ -141,12 +205,3 @@ def explain_score(score: float) -> str:
         return "Partial match. Several important skills are missing."
     else:
         return "Weak match for this role."
-    
-    
-def normalize_text(text: str) -> str:
-    text = text.lower()
-
-    for old, new in NORMALIZATION_MAP.items():
-        text = text.replace(old, new)
-
-    return text

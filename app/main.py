@@ -1,5 +1,6 @@
 import logging
 from pathlib import Path
+from app.database import init_db
 
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
@@ -12,6 +13,7 @@ logging.basicConfig(level=logging.INFO)
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 app = FastAPI(title="AI Resume Analyzer API")
+init_db()
 
 app.include_router(resume_router)
 
