@@ -10,3 +10,4 @@ openai
 scikit-learn
 python-docx
 Pillow
+pytesseract
