@@ -8,3 +8,4 @@ httpx
 python-dotenv
 openai
 scikit-learn
+python-docx
