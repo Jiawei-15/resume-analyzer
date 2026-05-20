@@ -1,4 +1,4 @@
-from app.semantic import semantic_match, get_semantic_source
+from app.semantic import semantic_match
 from app.weights import SKILL_WEIGHTS
 from app.normalization import NORMALIZATION_MAP
 from app.skills import SKILLS_DB
@@ -118,7 +118,7 @@ def match_job(resume_text: str, resume_skills: list, job_text: str) -> dict:
         if total_weight > 0 else 0
     )
 
-    semantic_score = semantic_match(
+    semantic_score, semantic_source = semantic_match(
         resume_text,
         job_text
     )
@@ -126,7 +126,7 @@ def match_job(resume_text: str, resume_skills: list, job_text: str) -> dict:
     return {
         "match_score": round(score, 2),
         "semantic_score": semantic_score,
-        "semantic_source": get_semantic_source(),
+        "semantic_source":semantic_source,
         "matched_skills": sorted(matched),
         "missing_skills": sorted(missing)
     }
