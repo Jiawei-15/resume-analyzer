@@ -27,7 +27,7 @@ This project was built as a portfolio backend/full-stack application focused on 
   - ML → machine learning
   - RESTful APIs → REST API
   - React.js → React
-  - Node.js → Node.js
+  - Node.js → Nodejs
 - Compare resume skills against a target job description
 - Calculate a weighted match score based on matched and missing skills
 - Calculate a semantic similarity score using either:
@@ -56,7 +56,7 @@ This project was built as a portfolio backend/full-stack application focused on 
 - Uvicorn
 - SQLite
 - scikit-learn
-- OpenAI API
+- OpenAI API optional
 - pypdf
 - python-docx
 - Pillow
@@ -550,7 +550,7 @@ This project helped me practice:
 Planned improvements include:
 
 - Add more API integration tests for `/analyze`, `/match`, and `/history`
-- Improve semantic source tracking when OpenAI fallback occurs
+- Add tests that explicitly verify OpenAI-to-TF-IDF fallback behavior
 - Add better error messages for unsupported or unreadable files
 - Expand the technical skill database
 - Add role-specific skill categories such as backend, frontend, data, machine learning, and DevOps
