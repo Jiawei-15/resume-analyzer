@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,6 +8,7 @@
 
     <link rel="stylesheet" href="/static/style.css">
 </head>
+
 <body>
 
     <div class="container">
@@ -19,18 +21,9 @@
 
         <form id="match-form">
 
-            <input
-                type="file"
-                id="resume"
-                accept=".pdf"
-                required
-            >
+            <input type="file" id="resume" accept=".pdf,.docx,.txt,.png,.jpg,.jpeg" required>
 
-            <textarea
-                id="job-description"
-                placeholder="Paste job description here..."
-                required
-            ></textarea>
+            <textarea id="job-description" placeholder="Paste job description here..." required></textarea>
 
             <button type="submit">
                 Analyze Resume
@@ -45,4 +38,5 @@
     <script src="/static/script.js"></script>
 
 </body>
+
 </html>
