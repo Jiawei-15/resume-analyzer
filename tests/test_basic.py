@@ -25,6 +25,7 @@ def test_match_rejects_missing_file_and_job_description():
     response = client.post("/match")
     assert response.status_code == 422
 
+
 def test_analyze_txt_resume():
     files = {
         "file": (
@@ -34,7 +35,10 @@ def test_analyze_txt_resume():
         )
     }
 
-    response = client.post("/analyze", files=files)
+    response = client.post(
+        "/analyze",
+        files=files
+    )
 
     assert response.status_code == 200
 
@@ -43,8 +47,15 @@ def test_analyze_txt_resume():
     assert body["success"] is True
     assert body["data"]["filename"] == "resume.txt"
     assert body["data"]["summary"]["skills_count"] > 0
-    assert "python" in body["data"]["skills"]["found"]
-    assert "fastapi" in body["data"]["skills"]["found"]
+
+    found_skills = [
+        skill.lower()
+        for skill in body["data"]["skills"]["found"]
+    ]
+
+    assert "python" in found_skills
+    assert "fastapi" in found_skills
+
 
 def test_match_txt_resume_with_job_description():
     files = {
@@ -62,7 +73,11 @@ def test_match_txt_resume_with_job_description():
         )
     }
 
-    response = client.post("/match", files=files, data=data)
+    response = client.post(
+        "/match",
+        files=files,
+        data=data
+    )
 
     assert response.status_code == 200
 
@@ -71,17 +86,32 @@ def test_match_txt_resume_with_job_description():
     assert body["success"] is True
     assert body["data"]["filename"] == "resume.txt"
 
-    summary = body["data"]["summary"]
-    skills = body["data"]["skills"]
-    analysis = body["data"]["analysis"]
+    result = body["data"]
 
-    assert 0.0 <= summary["match_score"] <= 1.0
-    assert 0.0 <= summary["semantic_score"] <= 1.0
-    assert summary["semantic_source"] in ("openai", "local")
+    assert "dynamic_match_score" in result
+    assert "dynamic_matched_skills" in result
+    assert "dynamic_missing_skills" in result
+    assert "job_profile" in result
+    assert "resume_profile" in result
+    assert "retrieved_evidence" in result
+    assert "rewrite_suggestions" in result
+    assert "agent_trace" in result
+    assert "used_fallback" in result
+    assert "llm_error" in result
 
-    assert "python" in skills["matched_skills"]
-    assert "fastapi" in skills["matched_skills"]
-    assert isinstance(analysis["feedback"], list)
+    assert isinstance(result["dynamic_match_score"], float)
+    assert 0.0 <= result["dynamic_match_score"] <= 1.0
+
+    assert isinstance(result["dynamic_matched_skills"], list)
+    assert isinstance(result["dynamic_missing_skills"], list)
+    assert isinstance(result["job_profile"], dict)
+    assert isinstance(result["resume_profile"], dict)
+    assert isinstance(result["retrieved_evidence"], str)
+    assert isinstance(result["rewrite_suggestions"], list)
+    assert isinstance(result["agent_trace"], list)
+
+    assert len(result["agent_trace"]) > 0
+
 
 def test_match_rejects_short_job_description():
     files = {
@@ -96,10 +126,15 @@ def test_match_rejects_short_job_description():
         "job_description": "Python"
     }
 
-    response = client.post("/match", files=files, data=data)
+    response = client.post(
+        "/match",
+        files=files,
+        data=data
+    )
 
     assert response.status_code == 400
     assert "too short" in response.json()["detail"].lower()
+
 
 def test_upload_rejects_unsupported_file_type():
     files = {
@@ -110,10 +145,14 @@ def test_upload_rejects_unsupported_file_type():
         )
     }
 
-    response = client.post("/upload", files=files)
+    response = client.post(
+        "/upload",
+        files=files
+    )
 
     assert response.status_code == 400
     assert "supported" in response.json()["detail"].lower()
+
 
 def test_history_returns_list():
     response = client.get("/history")
