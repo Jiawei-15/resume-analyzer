@@ -1,341 +1,467 @@
-import logging
+import os
+import tempfile
+from typing import Any, Dict
 
-from fastapi import HTTPException
+from fastapi import UploadFile, HTTPException
 
-from app.database import save_analysis
-
-from app.utils import (
-    extract_text_from_pdf,
-    extract_text_from_docx,
-    extract_text_from_txt,
-    extract_text_from_image,
-    extract_skills,
-    match_job,
-    generate_feedback,
-    explain_score
-)
-
-logger = logging.getLogger(__name__)
+from app.agents.orchestrator import RecruitmentOrchestrator
+try:
+    from app.database import save_analysis
+except ImportError:
+    save_analysis = None
 
 
-SUPPORTED_EXTENSIONS = {
+ALLOWED_EXTENSIONS = {
     ".pdf",
     ".docx",
-    ".txt",
-    ".png",
-    ".jpg",
-    ".jpeg"
+    ".txt"
 }
 
 
-def get_file_extension(filename: str) -> str:
-    if not filename or "." not in filename:
-        return ""
+def validate_resume_file(file: UploadFile) -> None:
+    """
+    Validate uploaded resume file.
+    """
 
-    return "." + filename.lower().split(".")[-1]
-
-
-def validate_resume_file(file):
-    extension = get_file_extension(file.filename)
-
-    if extension not in SUPPORTED_EXTENSIONS:
-        logger.warning(f"Rejected unsupported file: {file.filename}")
-
+    if not file.filename:
         raise HTTPException(
             status_code=400,
-            detail="Only PDF, DOCX, TXT, PNG, JPG, and JPEG files are supported."
+            detail="No file uploaded."
         )
 
+    file_extension = os.path.splitext(file.filename)[1].lower()
 
-def parse_resume(content, filename):
-    extension = get_file_extension(filename)
-
-    try:
-        if extension == ".pdf":
-            extracted_text = extract_text_from_pdf(content)
-
-        elif extension == ".docx":
-            extracted_text = extract_text_from_docx(content)
-
-        elif extension == ".txt":
-            extracted_text = extract_text_from_txt(content)
-
-        elif extension in [".png", ".jpg", ".jpeg"]:
-            extracted_text = extract_text_from_image(content)
-
-        else:
-            raise HTTPException(
-                status_code=400,
-                detail="Only PDF, DOCX, TXT, PNG, JPG, and JPEG files are supported."
-            )
-
-    except HTTPException:
-        raise
-
-    except RuntimeError as e:
-        logger.error(f"OCR failed for {filename}: {str(e)}")
-
+    if file_extension not in ALLOWED_EXTENSIONS:
         raise HTTPException(
             status_code=400,
-            detail="Image OCR failed. Tesseract OCR may not be installed or configured."
+            detail="Unsupported file type. Please upload a PDF, DOCX, or TXT file."
         )
 
-    except Exception as e:
-        logger.error(f"Resume parsing failed for {filename}: {str(e)}")
 
+def analyze_resume_logic(
+    file: UploadFile,
+    content: bytes
+) -> Dict[str, Any]:
+    """
+    Basic resume analysis endpoint logic.
+    Keep this compatible with your existing /analyze endpoint.
+    """
+
+    resume_text = extract_text_from_upload(
+        file=file,
+        content=content
+    )
+
+    if not resume_text.strip():
         raise HTTPException(
             status_code=400,
-            detail="Failed to read resume file."
+            detail="Could not extract text from the uploaded resume."
         )
 
-    if not extracted_text.strip():
-        logger.warning(f"No readable text found in: {filename}")
+    skills = extract_simple_skills(resume_text)
 
-        raise HTTPException(
-            status_code=400,
-            detail="No readable text found in the resume file."
-        )
-
-    return extracted_text
-
-
-def get_resume_level(skills_count):
-    if skills_count >= 12:
-        return "Strong"
-    elif skills_count >= 6:
-        return "Moderate"
-    else:
-        return "Needs Improvement"
-
-
-def generate_strengths(skills):
-    strengths = []
-
-    if not skills:
-        return ["No clear technical skills were detected from the resume."]
-
-    if len(skills) >= 6:
-        strengths.append("The resume includes a reasonable number of technical skills.")
-
-    programming_indicators = [
-        "python",
-        "java",
-        "javascript",
-        "typescript",
-        "fastapi",
-        "flask",
-        "django",
-        "scikit-learn",
-        "pandas",
-        "numpy"
-    ]
-
-    if any(skill.lower() in programming_indicators for skill in skills):
-        strengths.append("The resume shows programming or framework experience.")
-
-    if any(skill.lower() in ["fastapi", "flask", "django", "react", "node.js"] for skill in skills):
-        strengths.append("The resume shows exposure to practical web development tools.")
-
-    if any(skill.lower() in ["machine learning", "scikit-learn", "pandas", "numpy"] for skill in skills):
-        strengths.append("The resume includes data or machine learning related skills.")
-
-    if not strengths:
-        strengths.append("The resume contains some relevant skills, but they need stronger context.")
-
-    return strengths
-
-
-def generate_weaknesses(skills):
-    weaknesses = []
-
-    if len(skills) < 5:
-        weaknesses.append("The resume may not show enough technical depth based on detected skills.")
-
-    programming_indicators = [
-        "python",
-        "java",
-        "javascript",
-        "typescript",
-        "fastapi",
-        "flask",
-        "django",
-        "scikit-learn",
-        "pandas",
-        "numpy"
-    ]
-
-    if not any(skill.lower() in programming_indicators for skill in skills):
-        weaknesses.append("No major programming language or programming framework was clearly detected.")
-
-    if not any(skill.lower() in ["git", "github"] for skill in skills):
-        weaknesses.append("Git or GitHub experience is not clearly visible.")
-
-    if not any(skill.lower() in ["api", "fastapi", "flask", "django", "react"] for skill in skills):
-        weaknesses.append("The resume does not clearly show full-stack or API development experience.")
-
-    if not weaknesses:
-        weaknesses.append(
-            "The main weakness is not the skill list itself, but whether the resume explains projects with enough detail."
-        )
-
-    return weaknesses
-
-
-def generate_resume_suggestions(skills):
-    suggestions = []
-
-    suggestions.append(
-        "Add project bullet points that explain what was built, what tools were used, and what the result was."
-    )
-
-    if not any(skill.lower() in ["git", "github"] for skill in skills):
-        suggestions.append("Include GitHub or version control experience if available.")
-
-    if not any(skill.lower() in ["api", "fastapi", "flask", "django"] for skill in skills):
-        suggestions.append("Add API/backend project experience if relevant.")
-
-    if len(skills) < 8:
-        suggestions.append(
-            "Add more concrete technical keywords, but only if they are supported by real project experience."
-        )
-
-    suggestions.append(
-        "Use measurable details where possible, such as number of files processed, response time, accuracy, or project scope."
-    )
-
-    return suggestions
-
-
-def generate_match_strengths(matched_skills):
-    if not matched_skills:
-        return ["The resume does not clearly match the main skills in the job description."]
-
-    strengths = [
-        f"The resume matches {len(matched_skills)} skill(s) from the job description."
-    ]
-
-    if len(matched_skills) >= 5:
-        strengths.append("The candidate shows strong overlap with the role requirements.")
-    elif len(matched_skills) >= 2:
-        strengths.append("The candidate shows some relevant overlap with the role requirements.")
-
-    return strengths
-
-
-def generate_match_weaknesses(missing_skills):
-    if not missing_skills:
-        return ["No major missing skills were detected from the job description."]
-
-    weaknesses = [
-        f"The resume is missing {len(missing_skills)} skill(s) from the job description."
-    ]
-
-    weaknesses.append(
-        "Some required keywords may not be visible enough for recruiter screening or ATS matching."
-    )
-
-    return weaknesses
-
-
-def generate_match_suggestions(missing_skills):
-    suggestions = []
-
-    if missing_skills:
-        suggestions.append(
-            "If the candidate has real experience with the missing skills, add them naturally into project or experience bullet points."
-        )
-
-        suggestions.append(
-            "Do not keyword-stuff missing skills without real supporting experience."
-        )
-
-        suggestions.append(
-            "Add one project bullet that directly connects the resume to the target job description."
-        )
-    else:
-        suggestions.append(
-            "The resume already covers the main detected job skills. Improve it by adding measurable project outcomes."
-        )
-
-    return suggestions
-
-
-def analyze_resume_logic(file, content):
-    logger.info(f"Analyzing resume: {file.filename}")
-
-    extracted_text = parse_resume(content, file.filename)
-
-    skills = extract_skills(extracted_text)
-
-    logger.info(
-        f"Extracted {len(skills)} skills from {file.filename}"
-    )
-
-    return {
+    result = {
         "filename": file.filename,
         "summary": {
-            "text_length": len(extracted_text),
+            "text_length": len(resume_text),
             "skills_count": len(skills),
-            "overall_level": get_resume_level(len(skills))
+            "overall_level": estimate_resume_level(skills)
         },
         "skills": {
             "found": skills
         },
         "analysis": {
-            "strengths": generate_strengths(skills),
-            "weaknesses": generate_weaknesses(skills),
-            "suggestions": generate_resume_suggestions(skills)
+            "strengths": build_basic_strengths(skills),
+            "weaknesses": build_basic_weaknesses(skills),
+            "suggestions": build_basic_suggestions(skills)
         },
-        "text_preview": extracted_text[:1500]
+        "text_preview": resume_text[:800]
     }
 
+    return result
 
-def match_resume_logic(file, content, job_description):
-    logger.info(f"Matching resume: {file.filename}")
 
-    extracted_text = parse_resume(content, file.filename)
+def match_resume_logic(
+    file: UploadFile,
+    content: bytes,
+    job_description: str
+) -> Dict[str, Any]:
+    """
+    Match resume against job description using the multi-agent pipeline.
+    """
 
-    skills = extract_skills(extracted_text)
-
-    result = match_job(extracted_text, skills, job_description)
-
-    feedback = generate_feedback(result["missing_skills"])
-
-    logger.info(
-        f"Match completed for {file.filename} | Score: {result['match_score']}"
+    resume_text = extract_text_from_upload(
+        file=file,
+        content=content
     )
 
-    save_analysis(
-        filename=file.filename,
-        result={
-            "match_score": result["match_score"],
-            "semantic_score": result["semantic_score"],
-            "semantic_source": result["semantic_source"],
-            "score_explanation": explain_score(result["match_score"]),
-            "resume_skills": skills,
-            "matched_skills": result["matched_skills"],
-            "missing_skills": result["missing_skills"],
-        },
-        feedback=feedback
+    if not resume_text.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Could not extract text from the uploaded resume."
+        )
+
+    orchestrator = RecruitmentOrchestrator()
+
+    orchestrator_result = orchestrator.run(
+        resume_text=resume_text,
+        job_description=job_description
     )
 
-    return {
+    match_result = orchestrator_result.get(
+        "match_result",
+        {}
+    )
+
+    evidence_profile = orchestrator_result.get(
+        "evidence_profile",
+        {}
+    )
+
+    rewrite_profile = orchestrator_result.get(
+        "rewrite_profile",
+        {}
+    )
+
+    agent_trace = orchestrator_result.get(
+        "trace",
+        []
+    )
+
+    retrieved_evidence = evidence_profile.get(
+        "retrieved_evidence",
+        ""
+    )
+
+    rewrite_suggestions = rewrite_profile.get(
+        "rewrite_suggestions",
+        []
+    )
+
+    result = {
+        **match_result,
         "filename": file.filename,
-        "summary": {
-            "match_score": result["match_score"],
-            "semantic_score": result["semantic_score"],
-            "semantic_source": result["semantic_source"],
-            "score_explanation": explain_score(result["match_score"])
-        },
-        "skills": {
-            "resume_skills": skills,
-            "matched_skills": result["matched_skills"],
-            "missing_skills": result["missing_skills"]
-        },
-        "analysis": {
-            "strengths": generate_match_strengths(result["matched_skills"]),
-            "weaknesses": generate_match_weaknesses(result["missing_skills"]),
-            "suggestions": generate_match_suggestions(result["missing_skills"]),
-            "feedback": feedback
-        }
+        "retrieved_evidence": retrieved_evidence,
+        "rewrite_suggestions": rewrite_suggestions,
+        "agent_trace": agent_trace,
+        "used_fallback": rewrite_profile.get(
+            "used_fallback",
+            False
+        ),
+        "llm_error": rewrite_profile.get(
+            "llm_error"
+        )
     }
+
+    save_match_result_if_possible(
+        filename=file.filename,
+        result=result
+    )
+
+    return result
+
+
+def extract_text_from_upload(
+    file: UploadFile,
+    content: bytes
+) -> str:
+    """
+    Extract text from uploaded TXT, PDF, or DOCX resume.
+    """
+
+    file_extension = os.path.splitext(file.filename)[1].lower()
+
+    if file_extension == ".txt":
+        return extract_text_from_txt(content)
+
+    if file_extension == ".pdf":
+        return extract_text_from_pdf(content)
+
+    if file_extension == ".docx":
+        return extract_text_from_docx(content)
+
+    raise HTTPException(
+        status_code=400,
+        detail="Unsupported file type."
+    )
+
+
+def extract_text_from_txt(content: bytes) -> str:
+    """
+    Extract text from TXT file.
+    """
+
+    try:
+        return content.decode("utf-8")
+    except UnicodeDecodeError:
+        return content.decode(
+            "latin-1",
+            errors="ignore"
+        )
+
+
+def extract_text_from_pdf(content: bytes) -> str:
+    """
+    Extract text from PDF file.
+
+    Requires:
+    pip install pypdf
+    """
+
+    try:
+        from pypdf import PdfReader
+    except ImportError:
+        raise HTTPException(
+            status_code=500,
+            detail="PDF support requires pypdf. Please install it with: pip install pypdf"
+        )
+
+    with tempfile.NamedTemporaryFile(
+        suffix=".pdf",
+        delete=False
+    ) as temp_file:
+        temp_file.write(content)
+        temp_path = temp_file.name
+
+    try:
+        reader = PdfReader(temp_path)
+
+        pages = []
+
+        for page in reader.pages:
+            page_text = page.extract_text() or ""
+            pages.append(page_text)
+
+        return "\n".join(pages)
+
+    finally:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+
+
+def extract_text_from_docx(content: bytes) -> str:
+    """
+    Extract text from DOCX file.
+
+    Requires:
+    pip install python-docx
+    """
+
+    try:
+        from docx import Document
+    except ImportError:
+        raise HTTPException(
+            status_code=500,
+            detail="DOCX support requires python-docx. Please install it with: pip install python-docx"
+        )
+
+    with tempfile.NamedTemporaryFile(
+        suffix=".docx",
+        delete=False
+    ) as temp_file:
+        temp_file.write(content)
+        temp_path = temp_file.name
+
+    try:
+        document = Document(temp_path)
+
+        paragraphs = [
+            paragraph.text
+            for paragraph in document.paragraphs
+            if paragraph.text.strip()
+        ]
+
+        return "\n".join(paragraphs)
+
+    finally:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+
+
+def extract_simple_skills(resume_text: str) -> list[str]:
+    """
+    Lightweight skill extraction for /analyze fallback.
+    Your advanced matching still happens inside the agent pipeline.
+    """
+
+    known_skills = [
+        "Python",
+        "Java",
+        "JavaScript",
+        "TypeScript",
+        "React",
+        "FastAPI",
+        "Flask",
+        "Django",
+        "Node.js",
+        "SQL",
+        "SQLite",
+        "PostgreSQL",
+        "MySQL",
+        "MongoDB",
+        "Docker",
+        "Git",
+        "GitHub",
+        "REST API",
+        "API",
+        "HTML",
+        "CSS",
+        "Machine Learning",
+        "AI",
+        "LLM",
+        "OpenAI",
+        "RAG",
+        "Embedding",
+        "Vector Search"
+    ]
+
+    lower_text = resume_text.lower()
+
+    found = []
+
+    for skill in known_skills:
+        if skill.lower() in lower_text:
+            found.append(skill)
+
+    return found
+
+
+def estimate_resume_level(skills: list[str]) -> str:
+    """
+    Estimate rough resume level from extracted skills.
+    """
+
+    if len(skills) >= 10:
+        return "strong"
+
+    if len(skills) >= 5:
+        return "medium"
+
+    return "entry"
+
+
+def build_basic_strengths(skills: list[str]) -> list[str]:
+    """
+    Build simple strengths for /analyze endpoint.
+    """
+
+    strengths = []
+
+    if skills:
+        strengths.append(
+            "The resume includes identifiable technical skills."
+        )
+
+    if "Python" in skills:
+        strengths.append(
+            "The resume shows Python programming experience."
+        )
+
+    if "FastAPI" in skills or "API" in skills or "REST API" in skills:
+        strengths.append(
+            "The resume includes backend or API-related experience."
+        )
+
+    if "React" in skills or "JavaScript" in skills:
+        strengths.append(
+            "The resume includes frontend development experience."
+        )
+
+    if not strengths:
+        strengths.append(
+            "The resume text was extracted successfully, but technical strengths are not explicit."
+        )
+
+    return strengths
+
+
+def build_basic_weaknesses(skills: list[str]) -> list[str]:
+    """
+    Build simple weaknesses for /analyze endpoint.
+    """
+
+    weaknesses = []
+
+    if len(skills) < 5:
+        weaknesses.append(
+            "The resume may not list enough explicit technical skills."
+        )
+
+    if "Docker" not in skills:
+        weaknesses.append(
+            "Docker or deployment experience is not clearly visible."
+        )
+
+    if "SQL" not in skills and "SQLite" not in skills and "PostgreSQL" not in skills and "MySQL" not in skills:
+        weaknesses.append(
+            "Database experience is not clearly visible."
+        )
+
+    if not weaknesses:
+        weaknesses.append(
+            "No major basic weaknesses were detected from keyword-level analysis."
+        )
+
+    return weaknesses
+
+
+def build_basic_suggestions(skills: list[str]) -> list[str]:
+    """
+    Build simple suggestions for /analyze endpoint.
+    """
+
+    suggestions = [
+        "Use concrete project bullets that explain the problem, technology stack, implementation, and result.",
+        "Add job-relevant keywords naturally instead of listing disconnected tools."
+    ]
+
+    if "Docker" not in skills:
+        suggestions.append(
+            "Consider adding Docker or deployment experience if you have used it."
+        )
+
+    if "FastAPI" not in skills:
+        suggestions.append(
+            "If applicable, mention FastAPI or backend API experience more explicitly."
+        )
+
+    if "RAG" not in skills and "Embedding" not in skills:
+        suggestions.append(
+            "If applicable, describe AI retrieval, embedding, or LLM-related project experience."
+        )
+
+    return suggestions
+
+
+def save_match_result_if_possible(
+    filename: str,
+    result: Dict[str, Any]
+) -> None:
+    """
+    Save match result if the project database layer supports it.
+    This avoids breaking the app if save_analysis has a different signature.
+    """
+
+    if save_analysis is None:
+        return
+
+    try:
+        save_analysis(
+            filename=filename,
+            match_score=result.get("match_score"),
+            semantic_score=result.get("semantic_score"),
+            semantic_source="multi_agent_pipeline",
+            score_explanation=result.get("score_explanation"),
+            resume_skills=result.get("resume_skills"),
+            matched_skills=result.get("matched_skills"),
+            missing_skills=result.get("missing_skills"),
+            feedback=result.get("feedback")
+        )
+
+    except TypeError:
+        # Your existing save_analysis may use a different function signature.
+        # Do not crash the user-facing analysis because of history saving.
+        return
+
+    except Exception:
+        return

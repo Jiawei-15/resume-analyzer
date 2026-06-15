@@ -57,16 +57,24 @@ def save_analysis(filename: str, result: dict, feedback: list):
     conn.close()
 
 
-def get_history(limit: int = 20) -> list:
+def get_history(limit: int = 5) -> list:
     conn = sqlite3.connect(DB_PATH)
     rows = conn.execute(
-        "SELECT * FROM analyses ORDER BY created_at DESC LIMIT ?",
-        (limit,)
+        "SELECT * FROM analyses ORDER BY created_at DESC"
     ).fetchall()
     conn.close()
 
     history = []
+    seen_filenames = set()
+
     for row in rows:
+        filename = row[2]
+
+        if filename in seen_filenames:
+            continue
+
+        seen_filenames.add(filename)
+
         history.append({
             "id": row[0],
             "created_at": row[1],
@@ -80,5 +88,8 @@ def get_history(limit: int = 20) -> list:
             "missing_skills": json.loads(row[9]),
             "feedback": json.loads(row[10])
         })
+
+        if len(history) >= limit:
+            break
 
     return history

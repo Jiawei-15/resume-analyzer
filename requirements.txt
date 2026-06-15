@@ -11,3 +11,4 @@ scikit-learn
 python-docx
 Pillow
 pytesseract
+python-docx

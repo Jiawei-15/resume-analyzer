@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional, Dict, Any
 from pydantic import BaseModel
 
 
@@ -45,6 +45,7 @@ class MatchSummary(BaseModel):
     match_score: float
     semantic_score: float
     semantic_source: str
+    level: str
     score_explanation: str
 
 
@@ -61,11 +62,23 @@ class MatchReport(BaseModel):
     feedback: List[str]
 
 
+class MatchRecommendations(BaseModel):
+    priority_fixes: List[str]
+    resume_bullets: List[str]
+    interview_talking_points: List[str]
+
+
 class MatchResumeData(BaseModel):
     filename: str
     summary: MatchSummary
     skills: MatchSkills
     analysis: MatchReport
+    recommendations: MatchRecommendations
+    risk_flags: List[str]
+    rag: Optional[Dict[str, Any]] = None
+    job_profile: Optional[Dict[str, Any]] = None
+    dynamic_analysis: Optional[Dict[str, Any]] = None
+    agent_pipeline: Optional[Dict[str, Any]] = None
 
 
 class MatchResumeResponse(BaseModel):

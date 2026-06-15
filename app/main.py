@@ -6,6 +6,7 @@ from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+
 from app.routers.resume import router as resume_router
 
 logging.basicConfig(level=logging.INFO)

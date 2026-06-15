@@ -1,10 +1,10 @@
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
+
 from app.database import get_history
 
 from app.schemas.responses import (
     UploadResponse,
-    AnalyzeResumeResponse,
-    MatchResumeResponse
+    AnalyzeResumeResponse
 )
 
 from app.services.resume_service import (
@@ -38,7 +38,10 @@ async def analyze_resume(file: UploadFile = File(...)):
 
     content = await file.read()
 
-    result = analyze_resume_logic(file, content)
+    result = analyze_resume_logic(
+        file,
+        content
+    )
 
     return {
         "success": True,
@@ -46,20 +49,22 @@ async def analyze_resume(file: UploadFile = File(...)):
     }
 
 
-@router.post("/match", tags=["Resume"], response_model=MatchResumeResponse)
+@router.post("/match", tags=["Resume"])
 async def match_resume(
     file: UploadFile = File(...),
     job_description: str = Form(...)
 ):
     validate_resume_file(file)
 
-    if not job_description.strip():
+    cleaned_job_description = job_description.strip()
+
+    if not cleaned_job_description:
         raise HTTPException(
             status_code=400,
             detail="Job description cannot be empty."
         )
 
-    if len(job_description.strip()) < 30:
+    if len(cleaned_job_description) < 30:
         raise HTTPException(
             status_code=400,
             detail="Job description is too short. Please provide a more complete job description."
@@ -70,13 +75,14 @@ async def match_resume(
     result = match_resume_logic(
         file,
         content,
-        job_description
+        cleaned_job_description
     )
 
     return {
         "success": True,
         "data": result
     }
+
 
 @router.get("/history", tags=["Resume"])
 def get_analysis_history():
