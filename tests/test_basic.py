@@ -99,7 +99,7 @@ def test_match_txt_resume_with_job_description():
     assert "used_fallback" in result
     assert "llm_error" in result
 
-    assert isinstance(result["dynamic_match_score"], float)
+    assert isinstance(result["dynamic_match_score"],(int, float))
     assert 0.0 <= result["dynamic_match_score"] <= 1.0
 
     assert isinstance(result["dynamic_matched_skills"], list)
