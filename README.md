@@ -1,341 +1,357 @@
-# Live Demo
+# AI Recruitment Copilot
+
+A full-stack AI-powered recruitment and resume matching application built with **FastAPI**, **OpenAI API**, **embeddings**, **multi-agent workflow orchestration**, **SQLite**, and a vanilla **HTML/CSS/JavaScript** frontend.
+
+The application allows users to upload a resume, paste a target job description, and receive a structured AI-generated report that includes:
+
+* Job description analysis
+* Candidate capability extraction
+* Dynamic resume-job match score
+* Matched and missing requirements
+* Resume evidence retrieval
+* AI-generated resume rewrite suggestions
+* Agent execution trace
+* Local analysis history
+
+This project was built as a portfolio AI engineering project focused on **LLM application development**, **multi-agent system design**, **retrieval-based evidence matching**, **FastAPI backend architecture**, **frontend-backend integration**, **testing**, and **deployment workflow**.
+
+---
+
+## Live Demo
 
 https://resume-analyzer-6pdw.onrender.com
 
-![CI](https://github.com/Jiawei-15/resume-analyzer/actions/workflows/ci.yml/badge.svg)
+---
+
+## Project Highlights
+
+* Refactored a traditional resume analyzer into a **multi-agent AI recruitment copilot**
+* Integrated **OpenAI Chat Completions** for structured job and resume analysis
+* Integrated **OpenAI Embeddings** for resume evidence retrieval
+* Built a lightweight **in-memory vector search pipeline**
+* Implemented a modular **agent orchestration layer**
+* Added AI-generated resume rewrite suggestions based on job gaps
+* Updated frontend rendering to support dynamic AI output
+* Added API-level pytest coverage for major endpoints
+* Cleaned legacy keyword-matching modules and simplified the backend structure
 
 ---
 
-# AI Resume Analyzer
+## Core Features
 
-A full-stack resume analysis web application built with FastAPI, Python, HTML, CSS, and JavaScript.
+### Resume Upload and Parsing
 
-The application allows users to upload a resume, paste a target job description, and receive a structured analysis of how well the resume matches the role. It extracts technical skills, normalizes common skill aliases, calculates a weighted skill match score, calculates a semantic similarity score, generates feedback for missing skills, and stores match history in a local SQLite database.
+Users can upload resumes in:
 
-This project was built as a portfolio backend/full-stack application focused on resume text processing, API design, semantic matching, automated testing, and deployment workflow.
+* PDF
+* DOCX
+* TXT
 
----
+The backend extracts text from the uploaded resume and validates unsupported file types.
 
-# Features
+### Job Description Analysis
 
-- Upload resume files in PDF, DOCX, TXT, PNG, JPG, and JPEG formats
-- Extract text from PDF, DOCX, and TXT files
-- Optional OCR support for image-based resumes when Tesseract OCR is available
-- Detect technical skills using a predefined skill database
-- Normalize common skill aliases, such as:
-  - JS → JavaScript
-  - ML → machine learning
-  - RESTful APIs → REST API
-  - React.js → React
-  - Node.js → Nodejs
-- Compare resume skills against a target job description
-- Calculate a weighted match score based on matched and missing skills
-- Calculate a semantic similarity score using either:
-  - OpenAI embeddings
-  - Local TF-IDF cosine similarity fallback
-- Generate structured feedback for missing or weakly represented skills
-- Save match history to SQLite
-- Provide a `/history` endpoint for recent analyses
-- Frontend and backend integration
-- Modular FastAPI backend structure
-- Pydantic response models
-- Logging and validation support
-- Automated testing with pytest
-- GitHub Actions CI workflow
-- Render deployment configuration
-- Docker support
+The system uses an LLM to extract structured job requirements from a pasted job description, including:
 
----
+* Job title
+* Industry
+* Required skills
+* Preferred skills
+* Soft skills
+* Responsibilities
 
-# Tech Stack
+### Resume Capability Analysis
 
-## Backend
+The system analyzes the candidate resume and extracts:
 
-- Python 3.11
-- FastAPI
-- Uvicorn
-- SQLite
-- scikit-learn
-- OpenAI API optional
-- pypdf
-- python-docx
-- Pillow
-- pytesseract
-- python-dotenv
-- Pydantic
+* Candidate profile
+* Relevant industries
+* Technical skills
+* Domain skills
+* Soft skills
+* Work evidence
 
-## Frontend
+### Multi-Agent Matching Pipeline
 
-- HTML
-- CSS
-- JavaScript
-- Jinja2 templates
+The `/match` endpoint runs a multi-agent workflow:
 
-## Testing and Deployment
+1. **JobAnalysisAgent**
+   Extracts structured requirements from the job description.
 
-- pytest
-- GitHub Actions
-- Docker
-- Render
+2. **ResumeAnalysisAgent**
+   Extracts structured candidate capabilities from the resume.
 
-## Other Tools
+3. **EvidenceRetrievalAgent**
+   Splits resume text into chunks, generates embeddings, and retrieves relevant resume evidence.
 
-- Git
-- GitHub
+4. **MatchDiagnosisAgent**
+   Compares job requirements with resume capabilities and generates a dynamic match score.
 
----
+5. **LLMResumeRewriteAgent**
+   Generates targeted resume rewrite suggestions using the job description, resume evidence, and match diagnosis.
 
-# Project Structure
+### Evidence Retrieval
+
+The project includes a lightweight retrieval pipeline:
 
 ```text
-resume-analyzer/
+resume text
+→ chunking
+→ embedding generation
+→ in-memory vector storage
+→ similarity search
+→ retrieved resume evidence
+```
+
+This gives the match report supporting evidence instead of only returning a score.
+
+### AI Resume Rewrite Suggestions
+
+The system generates targeted improvement suggestions, such as:
+
+* Missing job requirement evidence
+* Weak project descriptions
+* Suggested resume bullet rewrites
+* Reasoning for each suggestion
+* Confidence level
+
+### Analysis History
+
+The application stores match history in a local SQLite database and exposes a `/history` endpoint for recent analyses.
+
+### Testing
+
+The project includes pytest-based API tests for:
+
+* Root page loading
+* FastAPI docs loading
+* Upload validation
+* Match validation
+* Resume analysis endpoint
+* Match endpoint response structure
+* Unsupported file validation
+* History endpoint
+
+Current local test result:
+
+```text
+9 passed
+```
+
+---
+
+## Tech Stack
+
+### Backend
+
+* Python
+* FastAPI
+* Uvicorn
+* OpenAI API
+* OpenAI Chat Completions
+* OpenAI Embeddings
+* SQLite
+* Pydantic
+* pypdf
+* python-docx
+* python-dotenv
+
+### AI / LLM
+
+* Multi-agent workflow orchestration
+* Structured JSON extraction
+* Resume-job requirement matching
+* Embedding-based evidence retrieval
+* LLM-generated resume rewrite suggestions
+* Rule-based fallback behavior
+
+### Frontend
+
+* HTML
+* CSS
+* JavaScript
+* Jinja2 templates
+
+### Testing and Deployment
+
+* pytest
+* GitHub Actions-compatible test suite
+* Render deployment configuration
+* Docker support
+
+---
+
+## Project Structure
+
+```text
+AI Recruitment Copilot/
 │
 ├── app/
-│   ├── routers/
-│   │   └── resume.py         # API endpoints
+│   ├── agents/
+│   │   ├── __init__.py
+│   │   ├── base_agent.py
+│   │   ├── orchestrator.py
+│   │   └── recruitment_agents.py
 │   │
-│   ├── services/
-│   │   └── resume_service.py # Business logic for analysis and matching
+│   ├── routers/
+│   │   ├── __init__.py
+│   │   └── resume.py
 │   │
 │   ├── schemas/
-│   │   └── responses.py      # Pydantic response models
+│   │   ├── __init__.py
+│   │   └── responses.py
 │   │
-│   ├── config.py             # Environment variable loading
-│   ├── database.py           # SQLite initialization, save, and query logic
-│   ├── normalization.py      # Skill alias normalization rules
-│   ├── semantic.py           # OpenAI embedding and TF-IDF semantic matching
-│   ├── skills.py             # Master technical skill list
-│   ├── utils.py              # Text extraction, skill extraction, scoring, feedback
-│   ├── weights.py            # Skill importance weights
-│   └── main.py               # FastAPI app entry point
-│
-├── tests/
-│   ├── test_basic.py         # Basic API endpoint tests
-│   └── test_utils.py         # Unit tests for core matching logic
+│   ├── services/
+│   │   ├── __init__.py
+│   │   ├── ai_skill_service.py
+│   │   ├── chunk_service.py
+│   │   ├── embedding_service.py
+│   │   ├── job_profile_service.py
+│   │   ├── llm_service.py
+│   │   ├── resume_service.py
+│   │   └── vector_store.py
+│   │
+│   ├── config.py
+│   ├── database.py
+│   └── main.py
 │
 ├── static/
-│   ├── script.js             # Frontend request and result rendering logic
-│   └── style.css             # Frontend styling
+│   ├── script.js
+│   └── style.css
 │
 ├── templates/
-│   └── index.html            # Main frontend page
+│   └── index.html
+│
+├── tests/
+│   └── test_basic.py
 │
 ├── assets/
-│
-├── .github/
-│   └── workflows/
-│       └── ci.yml            # GitHub Actions CI workflow
+│   ├── homepage.png
+│   ├── match-input.png
+│   ├── match-output.png
+│   └── results.png
 │
 ├── Dockerfile
 ├── requirements.txt
 ├── render.yaml
+├── pytest.ini
 ├── .env.example
+├── .gitignore
 └── README.md
 ```
 
 ---
 
-# API Endpoints
+## API Endpoints
 
-| Method | Endpoint | Description |
-|---|---|---|
-| GET | `/` | Loads the frontend web interface |
-| POST | `/upload` | Validates and uploads a resume file |
-| POST | `/analyze` | Extracts resume text and detects technical skills |
-| POST | `/match` | Compares a resume against a job description |
-| GET | `/history` | Returns the 20 most recent resume match results |
-| GET | `/docs` | Opens the FastAPI Swagger documentation |
-
----
-
-# How It Works
-
-1. The user uploads a resume file and pastes a target job description.
-2. The FastAPI backend receives the file and job description through a multipart form request.
-3. The backend validates the uploaded file extension.
-4. Resume text is extracted based on file type:
-   - PDF files are parsed with `pypdf`
-   - DOCX files are parsed with `python-docx`
-   - TXT files are decoded directly
-   - Image files can be processed with OCR through `pytesseract`
-5. Extracted text is normalized to handle common skill name variations.
-6. Technical skills are detected using a predefined skill database.
-7. The job description is scanned for required skills.
-8. Resume skills and job description skills are compared.
-9. A weighted match score is calculated based on matched and missing skills.
-10. A semantic similarity score is calculated using either OpenAI embeddings or local TF-IDF.
-11. Missing skills are converted into structured feedback.
-12. Match results are saved to SQLite history.
-13. The frontend displays the score, matched skills, missing skills, strengths, weaknesses, suggestions, and feedback.
+| Method | Endpoint   | Description                                       |
+| ------ | ---------- | ------------------------------------------------- |
+| GET    | `/`        | Loads the frontend web interface                  |
+| POST   | `/upload`  | Validates uploaded resume files                   |
+| POST   | `/analyze` | Performs basic resume analysis                    |
+| POST   | `/match`   | Runs the multi-agent resume-job matching pipeline |
+| GET    | `/history` | Returns recent analysis history                   |
+| GET    | `/docs`    | Opens the FastAPI Swagger documentation           |
 
 ---
 
-# Semantic Matching
+## Example `/match` Response Fields
 
-This project supports two semantic scoring modes.
-
-## 1. OpenAI Embeddings
-
-When `OPENAI_API_KEY` is available and `USE_OPENAI_EMBEDDINGS=True`, the application can use OpenAI `text-embedding-3-small`.
-
-The resume text and job description are converted into vector embeddings, and cosine similarity is used to estimate how semantically similar they are.
-
-## 2. TF-IDF Local Fallback
-
-When OpenAI credentials are missing, disabled, or unavailable, the application falls back to local TF-IDF cosine similarity using scikit-learn.
-
-This allows the application to keep working without external API access.
-
-Example response fields:
-
-```json
-{
-  "semantic_score": 0.72,
-  "semantic_source": "local"
-}
-```
-
-or:
-
-```json
-{
-  "semantic_score": 0.84,
-  "semantic_source": "openai"
-}
-```
-
----
-
-# Skill Matching Logic
-
-The project uses two main matching layers.
-
-## 1. Skill Extraction
-
-Resume text is normalized before skill extraction.
-
-Examples:
-
-```text
-JS              → javascript
-ML              → machine learning
-RESTful APIs    → rest api
-React.js        → react
-Node.js         → nodejs
-```
-
-The normalized text is then compared against a predefined technical skill database.
-
-## 2. Weighted Job Matching
-
-The job description is scanned for required technical skills.
-
-Each detected job skill is classified as either:
-
-- Matched: the skill appears in the resume
-- Missing: the skill appears in the job description but not in the resume
-
-The match score is calculated using skill weights. More important skills can contribute more heavily to the final score than smaller peripheral skills.
-
-Example result:
-
-```json
-{
-  "match_score": 0.67,
-  "matched_skills": ["python", "fastapi", "sql"],
-  "missing_skills": ["docker", "react"]
-}
-```
-
----
-
-# Analysis History
-
-Every `/match` request is saved to a local SQLite database.
-
-The `/history` endpoint returns the 20 most recent analyses with:
-
-- Filename
-- Match score
-- Semantic score
-- Semantic source
-- Score explanation
-- Resume skills
-- Matched skills
-- Missing skills
-- Feedback
-
-Example request:
-
-```bash
-GET /history
-```
-
-Example response shape:
+The `/match` endpoint returns a structured report containing:
 
 ```json
 {
   "success": true,
-  "data": [
-    {
-      "id": 1,
-      "created_at": "2026-05-20T12:30:00",
-      "filename": "resume.pdf",
-      "match_score": 0.75,
-      "semantic_score": 0.68,
-      "semantic_source": "local",
-      "score_explanation": "Moderate match with some missing skills.",
-      "resume_skills": ["python", "fastapi", "sql"],
-      "matched_skills": ["python", "sql"],
-      "missing_skills": ["docker"],
-      "feedback": [
-        "Docker is commonly expected for backend and deployment roles."
-      ]
-    }
-  ]
+  "data": {
+    "filename": "resume.txt",
+    "dynamic_match_score": 0.86,
+    "dynamic_matched_skills": [
+      "Python",
+      "FastAPI",
+      "SQL",
+      "Git",
+      "machine learning"
+    ],
+    "dynamic_missing_skills": [
+      "Java"
+    ],
+    "job_profile": {
+      "job_title": "Backend Developer",
+      "industry": "Technology",
+      "required_skills": [],
+      "preferred_skills": [],
+      "soft_skills": [],
+      "responsibilities": []
+    },
+    "resume_profile": {
+      "candidate_title": "Machine Learning Engineer",
+      "industries": [],
+      "technical_skills": [],
+      "domain_skills": [],
+      "soft_skills": [],
+      "work_evidence": []
+    },
+    "retrieved_evidence": "...",
+    "rewrite_suggestions": [],
+    "agent_trace": [],
+    "used_fallback": false,
+    "llm_error": null
+  }
 }
 ```
 
 ---
 
-# Testing and CI
+## How It Works
 
-The project includes unit tests and basic API tests using `pytest`.
-
-Current test coverage includes:
-
-- Root page loading
-- FastAPI documentation page loading
-- Required upload field validation
-- Required match field validation
-- Skill extraction
-- Skill alias normalization
-- Empty skill extraction cases
-- No-match skill extraction cases
-- Perfect job match logic
-- Partial job match logic
-- No-match job logic
-- Semantic score field validation
-- Semantic source field validation
-- Feedback generation for missing skills
-- Score explanation categories
-
-GitHub Actions automatically runs the test suite on:
-
-- Pushes to the `main` branch
-- Pull requests targeting the `main` branch
-
-The CI workflow installs dependencies, configures a Python 3.11 environment, and runs:
-
-```bash
-pytest tests/ -v
-```
-
-The CI environment disables OpenAI embeddings so the test suite can run using the local TF-IDF fallback without requiring an API key.
+1. The user uploads a resume and submits a job description.
+2. The FastAPI backend validates the uploaded file.
+3. Resume text is extracted from PDF, DOCX, or TXT.
+4. The job description is sent to the Job Analysis Agent.
+5. The resume text is sent to the Resume Analysis Agent.
+6. Resume text is split into chunks.
+7. Embeddings are generated for resume chunks and the job description.
+8. Relevant resume evidence is retrieved through vector similarity search.
+9. The Match Diagnosis Agent compares job requirements and resume capabilities.
+10. The LLM Resume Rewrite Agent generates improvement suggestions.
+11. The frontend displays the full report, including score, evidence, gaps, suggestions, and agent trace.
+12. The result is optionally saved to SQLite history.
 
 ---
 
-# Environment Variables
+## Multi-Agent Workflow
+
+```text
+User Upload + Job Description
+        │
+        ▼
+Resume Router
+        │
+        ▼
+Resume Service
+        │
+        ▼
+Recruitment Orchestrator
+        │
+        ├── JobAnalysisAgent
+        │       └── Extract job requirements
+        │
+        ├── ResumeAnalysisAgent
+        │       └── Extract candidate capabilities
+        │
+        ├── EvidenceRetrievalAgent
+        │       └── Retrieve relevant resume evidence with embeddings
+        │
+        ├── MatchDiagnosisAgent
+        │       └── Compare job requirements and resume capabilities
+        │
+        └── LLMResumeRewriteAgent
+                └── Generate resume rewrite suggestions
+```
+
+---
+
+## Environment Variables
 
 Create a local `.env` file based on `.env.example`.
 
@@ -344,73 +360,64 @@ OPENAI_API_KEY=your_api_key_here
 USE_OPENAI_EMBEDDINGS=True
 ```
 
-The application can run without an OpenAI API key.
-
-When no API key is provided, or when OpenAI embeddings are disabled, semantic scoring uses local TF-IDF cosine similarity.
-
-For local-only mode:
-
-```env
-OPENAI_API_KEY=
-USE_OPENAI_EMBEDDINGS=False
-```
-
 Do not commit your real `.env` file to GitHub.
+
+The application includes fallback handling when the OpenAI service is unavailable, but the full AI workflow is designed to run with a valid OpenAI API key.
 
 ---
 
-# Run Locally
+## Run Locally
 
-## 1. Clone the repository
+### 1. Clone the repository
 
 ```bash
 git clone https://github.com/Jiawei-15/resume-analyzer.git
 cd resume-analyzer
 ```
 
-## 2. Create and activate a virtual environment
+### 2. Create and activate a virtual environment
 
-### Windows
-
-```bash
-python -m venv venv
-venv\Scripts\activate
-```
-
-### macOS / Linux
+Windows:
 
 ```bash
-python3 -m venv venv
-source venv/bin/activate
+python -m venv .venv
+.venv\Scripts\activate
 ```
 
-## 3. Install dependencies
+macOS / Linux:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
+### 3. Install dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-## 4. Create environment file
+### 4. Create environment file
 
 ```bash
 cp .env.example .env
 ```
 
-Then edit `.env` if you want to enable OpenAI embeddings.
+Then add your OpenAI API key if you want to run the full AI workflow.
 
-## 5. Start the development server
+### 5. Start the development server
 
 ```bash
 uvicorn app.main:app --reload
 ```
 
-## 6. Open the application
+### 6. Open the application
 
 ```text
 http://127.0.0.1:8000
 ```
 
-## 7. Open API documentation
+### 7. Open API documentation
 
 ```text
 http://127.0.0.1:8000/docs
@@ -418,33 +425,32 @@ http://127.0.0.1:8000/docs
 
 ---
 
-# Run Tests
+## Run Tests
 
 ```bash
-pytest tests/ -v
+pytest
 ```
 
-For local testing without OpenAI:
+Expected result:
 
-```env
-OPENAI_API_KEY=
-USE_OPENAI_EMBEDDINGS=False
+```text
+9 passed
 ```
 
 ---
 
-# Run with Docker
+## Run with Docker
 
 Build the image:
 
 ```bash
-docker build -t resume-analyzer .
+docker build -t ai-recruitment-copilot .
 ```
 
 Run the container:
 
 ```bash
-docker run -p 10000:10000 resume-analyzer
+docker run -p 10000:10000 ai-recruitment-copilot
 ```
 
 Open:
@@ -453,11 +459,9 @@ Open:
 http://127.0.0.1:10000
 ```
 
-Note: OCR for image-based resumes requires Tesseract OCR to be installed in the container or deployment environment. If Tesseract is not available, PDF, DOCX, and TXT parsing can still work, but image OCR may fail.
-
 ---
 
-# Deployment
+## Deployment
 
 This project includes a `render.yaml` file for Render deployment.
 
@@ -469,99 +473,75 @@ uvicorn app.main:app --host 0.0.0.0 --port 10000
 
 For deployment, environment variables should be configured in the hosting platform instead of committing them to the repository.
 
-Recommended demo environment variables:
-
-```env
-OPENAI_API_KEY=
-USE_OPENAI_EMBEDDINGS=False
-```
-
-OpenAI embeddings can be enabled by adding a valid API key and setting:
-
-```env
-USE_OPENAI_EMBEDDINGS=True
-```
-
 ---
 
-# Example Use Case
+## Example Use Case
 
-A student or job seeker can upload a resume and paste a backend or full-stack job description.
+A job seeker can upload a resume and paste a software engineering or AI-related job description.
 
-The application can return:
+The system can return:
 
-- Overall match score
-- Semantic similarity score
-- Matched technical skills
-- Missing technical skills
-- Strengths
-- Weaknesses
-- Suggestions
-- Skill-specific feedback
+* AI match score
+* Matched job requirements
+* Missing job requirements
+* Structured job profile
+* Structured candidate profile
+* Resume evidence retrieved from the uploaded file
+* AI-generated resume rewrite suggestions
+* Agent execution trace
 
 Example output:
 
 ```text
-Match Score: 72%
-Semantic Score: 65%
-Matched Skills: Python, FastAPI, SQL
-Missing Skills: Docker, React
-Feedback: Docker is commonly expected for backend and deployment roles.
+Dynamic AI Match: 86%
+Matched Requirements: Python, FastAPI, SQL, Git, machine learning
+Missing Requirements: Java
+Candidate Profile: Machine Learning Engineer
+LLM Fallback Used: false
 ```
 
 ---
 
-# Limitations
+## Current Limitations
 
-- Skill extraction is based on a predefined skill database, so uncommon or highly specialized skills may not be detected.
-- Match scores are intended as guidance and should not replace human resume review.
-- OCR for image-based resumes requires Tesseract OCR to be installed in the runtime environment.
-- SQLite is used for local/demo history storage and is not intended as a production-scale database.
-- Semantic scoring depends on either OpenAI embeddings or local TF-IDF similarity, so results may vary depending on configuration.
-- The project does not perform advanced resume formatting analysis.
-- The project does not guarantee ATS compatibility.
-- The current matching logic focuses mainly on technical skills and does not deeply evaluate work experience quality, seniority, achievements, or soft skills.
+* The current vector store is in-memory and designed for demo use.
+* Match scoring is useful for guidance, but it should not replace human resume review.
+* AI extraction results may vary slightly depending on the job description and resume wording.
+* Long resumes and complex job descriptions may increase response time because multiple LLM and embedding calls are used.
+* The current retrieval pipeline retrieves general resume evidence, but requirement-level evidence mapping is a planned improvement.
+* SQLite is used for local/demo history storage and is not intended as a production-scale database.
 
 ---
 
-# What I Learned
-
-This project helped me practice:
-
-- Building a FastAPI backend
-- Handling file uploads
-- Parsing different resume file formats
-- Separating API routes, service logic, utilities, and schemas
-- Designing structured JSON API responses
-- Using SQLite for simple persistence
-- Applying text normalization for skill extraction
-- Combining keyword-based matching with semantic similarity
-- Using OpenAI embeddings as an optional enhancement
-- Implementing a local TF-IDF fallback
-- Writing unit tests with pytest
-- Setting up GitHub Actions CI
-- Deploying a web application to Render
-- Documenting a full-stack project for portfolio use
-
----
-
-# Future Improvements
+## Future Improvements
 
 Planned improvements include:
 
-- Add more API integration tests for `/analyze`, `/match`, and `/history`
-- Add tests that explicitly verify OpenAI-to-TF-IDF fallback behavior
-- Add better error messages for unsupported or unreadable files
-- Expand the technical skill database
-- Add role-specific skill categories such as backend, frontend, data, machine learning, and DevOps
-- Add a history page in the frontend instead of exposing history only through the API
-- Improve UI layout for mobile screens
-- Add optional user authentication for saving private analysis history
-- Add cloud database support for production deployment
-- Add more advanced resume analysis beyond keyword and skill matching
+* Requirement-level evidence mapping
+* Weighted must-have vs nice-to-have job requirement scoring
+* Mock OpenAI services for faster and more stable CI tests
+* Caching embeddings to reduce repeated API calls
+* Async or optional resume rewrite generation for faster user experience
+* Better support for enterprise job description parsing
+* More detailed ATS-style risk analysis
+* Improved frontend loading states and progress feedback
+* Persistent vector database support
 
 ---
 
-# Author
+## Resume Summary
 
-Built as a portfolio project to practice full-stack development, FastAPI backend architecture, resume text processing, semantic matching, automated testing, and deployment workflows.
+This project demonstrates practical experience with:
+
+* FastAPI backend development
+* OpenAI API integration
+* Multi-agent AI workflow design
+* Embedding-based retrieval
+* Resume-job matching logic
+* API response design
+* Frontend-backend integration
+* SQLite persistence
+* pytest API testing
+* Deployment-oriented project structure
+
+---
