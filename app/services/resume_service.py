@@ -5,6 +5,7 @@ from typing import Any, Dict
 from fastapi import UploadFile, HTTPException
 
 from app.agents.orchestrator import RecruitmentOrchestrator
+
 try:
     from app.database import save_analysis
 except ImportError:
@@ -88,6 +89,10 @@ def match_resume_logic(
 ) -> Dict[str, Any]:
     """
     Match resume against job description using the multi-agent pipeline.
+
+    This function normalizes the orchestrator output into a frontend-friendly
+    response shape, so the UI can reliably access job, resume, match,
+    evidence, rewrite, and trace data.
     """
 
     resume_text = extract_text_from_upload(
@@ -110,6 +115,16 @@ def match_resume_logic(
 
     match_result = orchestrator_result.get(
         "match_result",
+        {}
+    )
+
+    job_profile = orchestrator_result.get(
+        "job_profile",
+        {}
+    )
+
+    resume_profile = orchestrator_result.get(
+        "resume_profile",
         {}
     )
 
@@ -138,12 +153,62 @@ def match_resume_logic(
         []
     )
 
+    resume_skills = (
+        resume_profile.get("technical_skills", [])
+        + resume_profile.get("domain_skills", [])
+        + resume_profile.get("soft_skills", [])
+    )
+
     result = {
         **match_result,
+
         "filename": file.filename,
+
+        "job_profile": job_profile,
+        "resume_profile": resume_profile,
+        "evidence_profile": evidence_profile,
+        "rewrite_profile": rewrite_profile,
+
+        "job_title": job_profile.get(
+            "job_title",
+            "General Role"
+        ),
+        "industry": job_profile.get(
+            "industry",
+            "General"
+        ),
+        "candidate_title": resume_profile.get(
+            "candidate_title",
+            "General Candidate"
+        ),
+
+        "required_skills": job_profile.get(
+            "required_skills",
+            []
+        ),
+        "preferred_skills": job_profile.get(
+            "preferred_skills",
+            []
+        ),
+        "soft_skills": job_profile.get(
+            "soft_skills",
+            []
+        ),
+        "responsibilities": job_profile.get(
+            "responsibilities",
+            []
+        ),
+
+        "resume_skills": resume_skills,
+        "work_evidence": resume_profile.get(
+            "work_evidence",
+            []
+        ),
+
         "retrieved_evidence": retrieved_evidence,
         "rewrite_suggestions": rewrite_suggestions,
         "agent_trace": agent_trace,
+
         "used_fallback": rewrite_profile.get(
             "used_fallback",
             False
@@ -392,7 +457,12 @@ def build_basic_weaknesses(skills: list[str]) -> list[str]:
             "Docker or deployment experience is not clearly visible."
         )
 
-    if "SQL" not in skills and "SQLite" not in skills and "PostgreSQL" not in skills and "MySQL" not in skills:
+    if (
+        "SQL" not in skills
+        and "SQLite" not in skills
+        and "PostgreSQL" not in skills
+        and "MySQL" not in skills
+    ):
         weaknesses.append(
             "Database experience is not clearly visible."
         )
@@ -459,8 +529,6 @@ def save_match_result_if_possible(
         )
 
     except TypeError:
-        # Your existing save_analysis may use a different function signature.
-        # Do not crash the user-facing analysis because of history saving.
         return
 
     except Exception:

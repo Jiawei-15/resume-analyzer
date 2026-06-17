@@ -55,11 +55,84 @@ form.addEventListener("submit", async (e) => {
         const jobProfile = data.job_profile || {};
         const resumeProfile = data.resume_profile || {};
 
-        const dynamicScore = getNumber(data.dynamic_match_score, 0);
-        const scorePercent = Math.round(dynamicScore * 100);
+        const dynamicScore = getNumber(
+            data.dynamic_match_score ?? data.match_score,
+            0
+        );
 
-        const matchedSkills = data.dynamic_matched_skills || [];
-        const missingSkills = data.dynamic_missing_skills || [];
+        const scorePercent = clampNumber(
+            Math.round(dynamicScore * 100),
+            0,
+            100
+        );
+
+        const matchedSkills =
+            data.dynamic_matched_skills
+            || data.matched_skills
+            || data.matched_requirements
+            || [];
+
+        const missingSkills =
+            data.dynamic_missing_skills
+            || data.missing_skills
+            || data.missing_requirements
+            || [];
+
+        const jobTitle =
+            jobProfile.job_title
+            || data.job_title
+            || "Unknown role";
+
+        const industry =
+            jobProfile.industry
+            || data.industry
+            || "Unknown industry";
+
+        const candidateTitle =
+            resumeProfile.candidate_title
+            || data.candidate_title
+            || "Unknown candidate profile";
+
+        const requiredSkills =
+            jobProfile.required_skills
+            || data.required_skills
+            || [];
+
+        const preferredSkills =
+            jobProfile.preferred_skills
+            || data.preferred_skills
+            || [];
+
+        const jobSoftSkills =
+            jobProfile.soft_skills
+            || data.soft_skills
+            || [];
+
+        const responsibilities =
+            jobProfile.responsibilities
+            || data.responsibilities
+            || [];
+
+        const candidateIndustries =
+            resumeProfile.industries
+            || [];
+
+        const technicalSkills =
+            resumeProfile.technical_skills
+            || [];
+
+        const domainSkills =
+            resumeProfile.domain_skills
+            || [];
+
+        const candidateSoftSkills =
+            resumeProfile.soft_skills
+            || [];
+
+        const workEvidence =
+            resumeProfile.work_evidence
+            || data.work_evidence
+            || [];
 
         const retrievedEvidence = data.retrieved_evidence || "";
         const rewriteSuggestions = data.rewrite_suggestions || [];
@@ -89,7 +162,7 @@ form.addEventListener("submit", async (e) => {
                 <div class="result-grid">
                     <div class="result-section">
                         <h3>Overall Scores</h3>
-                        <p><strong>Dynamic AI Match:</strong> ${scorePercent}%</p>
+                        <p><strong>Dynamic Match:</strong> ${scorePercent}%</p>
                         <p><strong>Matched Requirements:</strong> ${matchedSkills.length}</p>
                         <p><strong>Missing Requirements:</strong> ${missingSkills.length}</p>
                         <p><strong>LLM Fallback Used:</strong> ${escapeHTML(String(usedFallback ?? "unknown"))}</p>
@@ -97,67 +170,67 @@ form.addEventListener("submit", async (e) => {
 
                     <div class="result-section">
                         <h3>System Classification</h3>
-                        <p><strong>AI Industry:</strong> ${escapeHTML(jobProfile.industry || "unknown")}</p>
-                        <p><strong>AI Job Title:</strong> ${escapeHTML(jobProfile.job_title || "unknown")}</p>
-                        <p><strong>Candidate Profile:</strong> ${escapeHTML(resumeProfile.candidate_title || "unknown")}</p>
+                        <p><strong>Industry:</strong> ${escapeHTML(industry)}</p>
+                        <p><strong>Job Title:</strong> ${escapeHTML(jobTitle)}</p>
+                        <p><strong>Candidate Profile:</strong> ${escapeHTML(candidateTitle)}</p>
                     </div>
                 </div>
 
                 <div class="result-section feedback-section">
                     <h3>1. Role Understanding</h3>
 
-                    <p><strong>Target Role:</strong> ${escapeHTML(jobProfile.job_title || "Unknown role")}</p>
-                    <p><strong>Industry:</strong> ${escapeHTML(jobProfile.industry || "Unknown industry")}</p>
+                    <p><strong>Target Role:</strong> ${escapeHTML(jobTitle)}</p>
+                    <p><strong>Industry:</strong> ${escapeHTML(industry)}</p>
 
                     <h4>Required Skills</h4>
                     <ul>
-                        ${renderList(jobProfile.required_skills, "No required skills extracted.")}
+                        ${renderList(requiredSkills, "No required skills extracted.")}
                     </ul>
 
                     <h4>Preferred Skills</h4>
                     <ul>
-                        ${renderList(jobProfile.preferred_skills, "No preferred skills extracted.")}
+                        ${renderList(preferredSkills, "No preferred skills extracted.")}
                     </ul>
 
                     <h4>Soft Skills</h4>
                     <ul>
-                        ${renderList(jobProfile.soft_skills, "No soft skills extracted.")}
+                        ${renderList(jobSoftSkills, "No soft skills extracted.")}
                     </ul>
 
                     <h4>Responsibilities</h4>
                     <ul>
-                        ${renderList(jobProfile.responsibilities, "No responsibilities extracted.")}
+                        ${renderList(responsibilities, "No responsibilities extracted.")}
                     </ul>
                 </div>
 
                 <div class="result-section feedback-section">
                     <h3>2. Candidate Understanding</h3>
 
-                    <p><strong>Candidate Profile:</strong> ${escapeHTML(resumeProfile.candidate_title || "Unknown candidate profile")}</p>
+                    <p><strong>Candidate Profile:</strong> ${escapeHTML(candidateTitle)}</p>
 
                     <h4>Candidate Industries</h4>
                     <ul>
-                        ${renderList(resumeProfile.industries, "No candidate industries extracted.")}
+                        ${renderList(candidateIndustries, "No candidate industries extracted.")}
                     </ul>
 
                     <h4>Technical Skills</h4>
                     <ul>
-                        ${renderList(resumeProfile.technical_skills, "No technical skills extracted.")}
+                        ${renderList(technicalSkills, "No technical skills extracted.")}
                     </ul>
 
                     <h4>Domain Skills</h4>
                     <ul>
-                        ${renderList(resumeProfile.domain_skills, "No domain skills extracted.")}
+                        ${renderList(domainSkills, "No domain skills extracted.")}
                     </ul>
 
                     <h4>Soft Skills</h4>
                     <ul>
-                        ${renderList(resumeProfile.soft_skills, "No soft skills extracted.")}
+                        ${renderList(candidateSoftSkills, "No soft skills extracted.")}
                     </ul>
 
                     <h4>Work Evidence</h4>
                     <ul>
-                        ${renderList(resumeProfile.work_evidence, "No work evidence extracted.")}
+                        ${renderList(workEvidence, "No work evidence extracted.")}
                     </ul>
                 </div>
 
@@ -183,7 +256,7 @@ form.addEventListener("submit", async (e) => {
                 </div>
 
                 <div class="result-section feedback-section">
-                    <h3>5. AI Resume Rewrite Suggestions</h3>
+                    <h3>5. Resume Rewrite Suggestions</h3>
 
                     ${renderRewriteSuggestions(rewriteSuggestions)}
 
@@ -273,6 +346,10 @@ function getNumber(value, fallback = 0) {
         : fallback;
 }
 
+function clampNumber(value, min, max) {
+    return Math.min(Math.max(value, min), max);
+}
+
 function buildScoreExplanation(scorePercent, matchedSkills, missingSkills) {
     if (scorePercent >= 75) {
         return "Strong alignment. The resume shows clear overlap with the target role.";
@@ -287,7 +364,7 @@ function buildScoreExplanation(scorePercent, matchedSkills, missingSkills) {
     }
 
     if (matchedSkills.length === 0 && missingSkills.length === 0) {
-        return "No match diagnosis was returned. Check whether the AI extraction step succeeded.";
+        return "No match diagnosis was returned. Check whether the extraction and matching pipeline produced structured output.";
     }
 
     return "Low alignment. The resume does not show enough visible overlap with the job requirements.";
@@ -346,8 +423,16 @@ function renderAgentTrace(trace) {
     return `
         <ul>
             ${trace.map(step => {
-        const agentName = step.agent || step.name || "Unknown Agent";
-        const status = step.status || step.success || "unknown";
+        const agentName =
+            step.agent_name
+            || step.agent
+            || step.name
+            || "Unknown Agent";
+
+        const status =
+            step.status
+            || step.success
+            || "unknown";
 
         return `
                     <li>
