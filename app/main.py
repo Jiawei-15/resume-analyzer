@@ -13,7 +13,7 @@ logging.basicConfig(level=logging.INFO)
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-app = FastAPI(title="AI Resume Analyzer API")
+app = FastAPI(title="AI Recruitment Copilot API")
 init_db()
 
 app.include_router(resume_router)
