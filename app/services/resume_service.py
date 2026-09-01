@@ -508,28 +508,56 @@ def save_match_result_if_possible(
     result: Dict[str, Any]
 ) -> None:
     """
-    Save match result if the project database layer supports it.
-    This avoids breaking the app if save_analysis has a different signature.
+    Persist the frontend-friendly match result in the history schema.
     """
 
     if save_analysis is None:
-        return
+        raise RuntimeError("History persistence is unavailable.")
 
-    try:
-        save_analysis(
-            filename=filename,
-            match_score=result.get("match_score"),
-            semantic_score=result.get("semantic_score"),
-            semantic_source="multi_agent_pipeline",
-            score_explanation=result.get("score_explanation"),
-            resume_skills=result.get("resume_skills"),
-            matched_skills=result.get("matched_skills"),
-            missing_skills=result.get("missing_skills"),
-            feedback=result.get("feedback")
+    feedback = normalize_history_list(
+        result.get("feedback")
+    )
+
+    history_result = {
+        "match_score": result.get("match_score"),
+        "semantic_score": result.get("semantic_score"),
+        "semantic_source": (
+            result.get("semantic_source")
+            or "multi_agent_pipeline"
+        ),
+        "score_explanation": (
+            result.get("score_explanation")
+            or ""
+        ),
+        "resume_skills": normalize_history_list(
+            result.get("resume_skills")
+        ),
+        "matched_skills": normalize_history_list(
+            result.get("matched_skills")
+        ),
+        "missing_skills": normalize_history_list(
+            result.get("missing_skills")
         )
+    }
 
-    except TypeError:
-        return
+    save_analysis(
+        filename=filename,
+        result=history_result,
+        feedback=feedback
+    )
 
-    except Exception:
-        return
+
+def normalize_history_list(value: Any) -> list:
+    if value is None:
+        return []
+
+    if isinstance(value, list):
+        return value
+
+    if isinstance(value, tuple):
+        return list(value)
+
+    if isinstance(value, set):
+        return list(value)
+
+    return [value]

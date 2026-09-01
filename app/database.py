@@ -1,68 +1,72 @@
 import sqlite3
 import json
+import os
+from contextlib import closing
 from datetime import datetime
 
 DB_PATH = "history.db"
+DB_PATH_ENV_VAR = "AI_RECRUITMENT_COPILOT_DB_PATH"
+
+
+def get_db_path() -> str:
+    return os.environ.get(DB_PATH_ENV_VAR, DB_PATH)
 
 
 def init_db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS analyses (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            created_at TEXT,
-            filename TEXT,
-            match_score REAL,
-            semantic_score REAL,
-            semantic_source TEXT,
-            score_explanation TEXT,
-            resume_skills TEXT,
-            matched_skills TEXT,
-            missing_skills TEXT,
-            feedback TEXT
-        )
-    """)
-    conn.commit()
-    conn.close()
+    with closing(sqlite3.connect(get_db_path())) as conn:
+        with conn:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS analyses (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    created_at TEXT,
+                    filename TEXT,
+                    match_score REAL,
+                    semantic_score REAL,
+                    semantic_source TEXT,
+                    score_explanation TEXT,
+                    resume_skills TEXT,
+                    matched_skills TEXT,
+                    missing_skills TEXT,
+                    feedback TEXT
+                )
+            """)
 
 
 def save_analysis(filename: str, result: dict, feedback: list):
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute("""
-        INSERT INTO analyses (
-            created_at,
-            filename,
-            match_score,
-            semantic_score,
-            semantic_source,
-            score_explanation,
-            resume_skills,
-            matched_skills,
-            missing_skills,
-            feedback
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (
-        datetime.now().isoformat(),
-        filename,
-        result["match_score"],
-        result["semantic_score"],
-        result["semantic_source"],
-        result.get("score_explanation", ""),
-        json.dumps(result.get("resume_skills", [])),
-        json.dumps(result["matched_skills"]),
-        json.dumps(result["missing_skills"]),
-        json.dumps(feedback)
-    ))
-    conn.commit()
-    conn.close()
+    with closing(sqlite3.connect(get_db_path())) as conn:
+        with conn:
+            conn.execute("""
+                INSERT INTO analyses (
+                    created_at,
+                    filename,
+                    match_score,
+                    semantic_score,
+                    semantic_source,
+                    score_explanation,
+                    resume_skills,
+                    matched_skills,
+                    missing_skills,
+                    feedback
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                datetime.now().isoformat(),
+                filename,
+                result["match_score"],
+                result["semantic_score"],
+                result["semantic_source"],
+                result.get("score_explanation", ""),
+                json.dumps(result.get("resume_skills", [])),
+                json.dumps(result["matched_skills"]),
+                json.dumps(result["missing_skills"]),
+                json.dumps(feedback)
+            ))
 
 
 def get_history(limit: int = 5) -> list:
-    conn = sqlite3.connect(DB_PATH)
-    rows = conn.execute(
-        "SELECT * FROM analyses ORDER BY created_at DESC"
-    ).fetchall()
-    conn.close()
+    with closing(sqlite3.connect(get_db_path())) as conn:
+        rows = conn.execute(
+            "SELECT * FROM analyses ORDER BY created_at DESC, id DESC"
+        ).fetchall()
 
     history = []
     seen_filenames = set()
