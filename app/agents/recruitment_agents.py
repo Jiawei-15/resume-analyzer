@@ -1,3 +1,5 @@
+import uuid
+
 from app.agents.base_agent import BaseAgent
 
 from app.services.ai_skill_service import (
@@ -8,13 +10,7 @@ from app.services.ai_skill_service import (
 
 from app.services.chunk_service import chunk_text
 from app.services.embedding_service import get_embedding
-from app.services.vector_store import add_embedding, search_embedding
-
-
-try:
-    from app.services.vector_store import clear_embeddings
-except ImportError:
-    clear_embeddings = None
+from app.services.vector_store import add_embedding, clear_embeddings, search_embedding
 
 
 class JobAnalysisAgent(BaseAgent):
@@ -60,26 +56,33 @@ class EvidenceRetrievalAgent(BaseAgent):
 
     def run(self, state):
 
+        vector_namespace = uuid.uuid4().hex
+
         try:
             resume_text = state["resume_text"]
             job_description = state["job_description"]
 
             chunks = chunk_text(resume_text)
 
-            if clear_embeddings is not None:
-                clear_embeddings()
+            clear_embeddings(
+                namespace=vector_namespace
+            )
 
             for chunk in chunks:
                 embedding = get_embedding(chunk)
 
                 add_embedding(
                     embedding,
-                    chunk
+                    chunk,
+                    namespace=vector_namespace
                 )
 
             query_embedding = get_embedding(job_description)
 
-            relevant_chunks = search_embedding(query_embedding)
+            relevant_chunks = search_embedding(
+                query_embedding,
+                namespace=vector_namespace
+            )
 
             if not relevant_chunks:
                 retrieved_evidence = resume_text[:3000]
@@ -96,6 +99,11 @@ class EvidenceRetrievalAgent(BaseAgent):
 
         except Exception as e:
             return self.failure(e)
+
+        finally:
+            clear_embeddings(
+                namespace=vector_namespace
+            )
 
 
 class MatchDiagnosisAgent(BaseAgent):

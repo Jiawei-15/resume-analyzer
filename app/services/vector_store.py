@@ -1,39 +1,68 @@
+from threading import RLock
 from typing import Any, Dict, List, Tuple
 
 from app.services.embedding_service import cosine_similarity
 
 
-_stored_vectors: List[Dict[str, Any]] = []
+_stored_vectors_by_namespace: Dict[str, List[Dict[str, Any]]] = {}
+_store_lock = RLock()
 
 
-def clear_embeddings() -> None:
+def _namespace_key(namespace: str) -> str:
+    if not isinstance(namespace, str) or not namespace.strip():
+        raise ValueError("Vector store namespace is required.")
+
+    return namespace
+
+
+def clear_embeddings(*, namespace: str) -> None:
     """
-    Clear all stored vectors.
-
-    This prevents resume chunks from previous requests
-    from polluting the current analysis.
+    Clear stored vectors for one request namespace.
     """
 
-    _stored_vectors.clear()
+    with _store_lock:
+        _stored_vectors_by_namespace.pop(
+            _namespace_key(namespace),
+            None
+        )
+
+
+def clear_all_embeddings_for_tests() -> None:
+    """
+    Clear the in-memory store between isolated tests.
+    """
+
+    with _store_lock:
+        _stored_vectors_by_namespace.clear()
 
 
 def add_embedding(
     embedding: List[float],
-    text: str
+    text: str,
+    *,
+    namespace: str
 ) -> None:
     """
     Add one text chunk and its embedding to the in-memory vector store.
     """
 
-    _stored_vectors.append({
-        "embedding": embedding,
-        "text": text
-    })
+    namespace_key = _namespace_key(namespace)
+
+    with _store_lock:
+        _stored_vectors_by_namespace.setdefault(
+            namespace_key,
+            []
+        ).append({
+            "embedding": embedding,
+            "text": text
+        })
 
 
 def search_embedding(
     query_embedding: List[float],
-    top_k: int = 3
+    top_k: int = 3,
+    *,
+    namespace: str
 ) -> List[str]:
     """
     Search the most relevant text chunks by cosine similarity.
@@ -42,9 +71,10 @@ def search_embedding(
     EvidenceRetrievalAgent.
     """
 
+    stored_vectors = _get_stored_vectors_snapshot(namespace)
     scored_chunks: List[Tuple[float, str]] = []
 
-    for item in _stored_vectors:
+    for item in stored_vectors:
         score = cosine_similarity(
             query_embedding,
             item["embedding"]
@@ -70,7 +100,9 @@ def search_embedding(
 
 def search_embedding_with_scores(
     query_embedding: List[float],
-    top_k: int = 3
+    top_k: int = 3,
+    *,
+    namespace: str
 ) -> List[Dict[str, Any]]:
     """
     Search the most relevant text chunks and return scores.
@@ -79,9 +111,10 @@ def search_embedding_with_scores(
     Current code may not use it yet.
     """
 
+    stored_vectors = _get_stored_vectors_snapshot(namespace)
     scored_chunks: List[Dict[str, Any]] = []
 
-    for index, item in enumerate(_stored_vectors):
+    for index, item in enumerate(stored_vectors):
         score = cosine_similarity(
             query_embedding,
             item["embedding"]
@@ -99,3 +132,19 @@ def search_embedding_with_scores(
     )
 
     return scored_chunks[:top_k]
+
+
+def _get_stored_vectors_snapshot(
+    namespace: str
+) -> List[Dict[str, Any]]:
+    with _store_lock:
+        return [
+            {
+                "embedding": list(item["embedding"]),
+                "text": item["text"]
+            }
+            for item in _stored_vectors_by_namespace.get(
+                _namespace_key(namespace),
+                []
+            )
+        ]
