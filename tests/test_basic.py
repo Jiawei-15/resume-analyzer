@@ -1,10 +1,16 @@
+import os
 import sqlite3
+import threading
 from contextlib import closing
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
+
+os.environ["OPENAI_API_KEY"] = ""
+os.environ["USE_OPENAI_EMBEDDINGS"] = "False"
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 REPO_HISTORY_DB = REPO_ROOT / "history.db"
@@ -29,6 +35,15 @@ def assert_repo_history_db_unchanged():
         current_stat = REPO_HISTORY_DB.stat()
         assert current_stat.st_mtime_ns == stat.st_mtime_ns
         assert current_stat.st_size == stat.st_size
+
+
+@pytest.fixture(autouse=True)
+def clear_vector_store_between_tests():
+    from app.services.vector_store import clear_all_embeddings_for_tests
+
+    clear_all_embeddings_for_tests()
+    yield
+    clear_all_embeddings_for_tests()
 
 
 @pytest.fixture()
@@ -158,19 +173,33 @@ def build_fake_orchestrator_result(config):
 
 
 def post_match(client, filename="resume.txt"):
+    return post_match_with_content(
+        client=client,
+        filename=filename,
+        resume_text="Python developer with FastAPI, SQLite, Docker, and Git experience.",
+        job_description=(
+            "We are hiring a backend developer with Python, FastAPI, "
+            "SQLite, Docker, and Git experience."
+        )
+    )
+
+
+def post_match_with_content(
+    client,
+    filename,
+    resume_text,
+    job_description
+):
     files = {
         "file": (
             filename,
-            b"Python developer with FastAPI, SQLite, Docker, and Git experience.",
+            resume_text.encode("utf-8"),
             "text/plain"
         )
     }
 
     data = {
-        "job_description": (
-            "We are hiring a backend developer with Python, FastAPI, "
-            "SQLite, Docker, and Git experience."
-        )
+        "job_description": job_description
     }
 
     return client.post(
@@ -285,6 +314,196 @@ def test_match_txt_resume_with_job_description(client):
     assert isinstance(result["agent_trace"], list)
 
     assert len(result["agent_trace"]) > 0
+
+
+@pytest.mark.parametrize(
+    ("alpha_filename", "beta_filename"),
+    [
+        ("alpha-resume.txt", "beta-resume.txt"),
+        ("same-name.txt", "same-name.txt")
+    ]
+)
+def test_concurrent_match_requests_use_isolated_vector_contexts(
+    client,
+    monkeypatch,
+    alpha_filename,
+    beta_filename
+):
+    from app.agents import recruitment_agents
+    from app.main import app
+
+    alpha_query_waiting = threading.Event()
+    beta_finished = threading.Event()
+
+    def controlled_get_embedding(text):
+        if "ALPHA_JOB_MARKER" in text:
+            alpha_query_waiting.set()
+
+            if not beta_finished.wait(timeout=10):
+                raise AssertionError("Timed out waiting for beta request.")
+
+        if "ALPHA_VECTOR_MARKER" in text:
+            return [1.0, 0.0]
+
+        if "BETA_VECTOR_MARKER" in text:
+            return [0.0, 1.0]
+
+        return [0.5, 0.5]
+
+    monkeypatch.setattr(
+        recruitment_agents,
+        "get_embedding",
+        controlled_get_embedding
+    )
+
+    alpha_resume = (
+        "ALPHA_VECTOR_MARKER alpha-only resume evidence. "
+        "Python FastAPI SQLite Docker Git."
+    )
+    beta_resume = (
+        "BETA_VECTOR_MARKER beta-only resume evidence. "
+        "Python FastAPI SQLite Docker Git."
+    )
+    alpha_job = (
+        "ALPHA_JOB_MARKER We are hiring a backend developer with "
+        "Python, FastAPI, SQLite, Docker, and Git experience."
+    )
+    beta_job = (
+        "BETA_JOB_MARKER We are hiring a backend developer with "
+        "Python, FastAPI, SQLite, Docker, and Git experience."
+    )
+
+    def submit_match(filename, resume_text, job_description):
+        with TestClient(app) as threaded_client:
+            return post_match_with_content(
+                client=threaded_client,
+                filename=filename,
+                resume_text=resume_text,
+                job_description=job_description
+            )
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        alpha_future = executor.submit(
+            submit_match,
+            alpha_filename,
+            alpha_resume,
+            alpha_job
+        )
+
+        assert alpha_query_waiting.wait(timeout=10)
+
+        beta_future = executor.submit(
+            submit_match,
+            beta_filename,
+            beta_resume,
+            beta_job
+        )
+
+        try:
+            beta_response = beta_future.result(timeout=10)
+        finally:
+            beta_finished.set()
+
+        alpha_response = alpha_future.result(timeout=10)
+
+    assert alpha_response.status_code == 200
+    assert beta_response.status_code == 200
+
+    alpha_evidence = alpha_response.json()["data"]["retrieved_evidence"]
+    beta_evidence = beta_response.json()["data"]["retrieved_evidence"]
+
+    assert "ALPHA_VECTOR_MARKER" in alpha_evidence
+    assert "alpha-only resume evidence" in alpha_evidence
+    assert "BETA_VECTOR_MARKER" not in alpha_evidence
+    assert "beta-only resume evidence" not in alpha_evidence
+
+    assert "BETA_VECTOR_MARKER" in beta_evidence
+    assert "beta-only resume evidence" in beta_evidence
+    assert "ALPHA_VECTOR_MARKER" not in beta_evidence
+    assert "alpha-only resume evidence" not in beta_evidence
+
+
+def test_vector_context_is_cleaned_after_evidence_failure(
+    client,
+    monkeypatch
+):
+    from app.agents import recruitment_agents
+    from app.services import vector_store
+
+    class FakeUUID:
+        hex = "failed-request-vector-namespace"
+
+    def failing_get_embedding(text):
+        if "FAIL_QUERY_MARKER" in text:
+            raise RuntimeError("forced embedding failure")
+
+        if "LEAK_VECTOR_MARKER" in text:
+            return [1.0, 0.0]
+
+        return [0.0, 1.0]
+
+    monkeypatch.setattr(
+        recruitment_agents.uuid,
+        "uuid4",
+        lambda: FakeUUID()
+    )
+    monkeypatch.setattr(
+        recruitment_agents,
+        "get_embedding",
+        failing_get_embedding
+    )
+
+    response = post_match_with_content(
+        client=client,
+        filename="failed-evidence.txt",
+        resume_text=(
+            "LEAK_VECTOR_MARKER temporary resume evidence. "
+            "Python FastAPI SQLite Docker Git."
+        ),
+        job_description=(
+            "FAIL_QUERY_MARKER We are hiring a backend developer with "
+            "Python, FastAPI, SQLite, Docker, and Git experience."
+        )
+    )
+
+    assert response.status_code == 200
+
+    result = response.json()["data"]
+
+    assert result["retrieved_evidence"] == ""
+    assert result["evidence_profile"]["error"] == "Evidence retrieval failed."
+    assert vector_store.search_embedding(
+        [1.0, 0.0],
+        namespace="failed-request-vector-namespace"
+    ) == []
+
+
+def test_vector_store_requires_explicit_namespace():
+    from app.services.vector_store import (
+        add_embedding,
+        clear_embeddings,
+        search_embedding,
+        search_embedding_with_scores
+    )
+
+    with pytest.raises(TypeError):
+        add_embedding([1.0], "resume evidence")
+
+    with pytest.raises(TypeError):
+        clear_embeddings()
+
+    with pytest.raises(TypeError):
+        search_embedding([1.0])
+
+    with pytest.raises(TypeError):
+        search_embedding_with_scores([1.0])
+
+    with pytest.raises(ValueError, match="namespace is required"):
+        add_embedding(
+            [1.0],
+            "resume evidence",
+            namespace=""
+        )
 
 
 def test_match_persists_history_row_and_returns_it(
