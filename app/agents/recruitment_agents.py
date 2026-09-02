@@ -9,7 +9,7 @@ from app.services.ai_skill_service import (
 )
 
 from app.services.chunk_service import chunk_text
-from app.services.embedding_service import get_embedding
+from app.services.embedding_service import calculate_semantic_similarity, get_embedding
 from app.services.vector_store import add_embedding, clear_embeddings, search_embedding
 
 
@@ -119,10 +119,17 @@ class MatchDiagnosisAgent(BaseAgent):
                 state["resume_profile"]
             )
 
-            return self.success(result)
-
         except Exception as e:
             return self.failure(e)
+
+        semantic_result = calculate_semantic_similarity(
+            resume_text=state.get("resume_text", ""),
+            job_description=state.get("job_description", "")
+        )
+
+        result.update(semantic_result)
+
+        return self.success(result)
 
 
 class ResumeRewriteAgent(BaseAgent):

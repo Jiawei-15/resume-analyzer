@@ -506,6 +506,243 @@ def test_vector_store_requires_explicit_namespace():
         )
 
 
+def test_tfidf_semantic_scores_related_text_above_unrelated():
+    from app.services.embedding_service import calculate_semantic_similarity
+
+    job_description = (
+        "Hiring a backend engineer for Python FastAPI APIs, SQLite data "
+        "storage, Docker deployment, and pytest automation."
+    )
+    related_resume = (
+        "Built Python FastAPI services with SQLite persistence, Docker "
+        "containers, and pytest integration tests."
+    )
+    unrelated_resume = (
+        "Prepared espresso drinks, arranged pastry displays, sanitized "
+        "kitchen stations, and handled cafe inventory."
+    )
+
+    related = calculate_semantic_similarity(
+        related_resume,
+        job_description
+    )
+    unrelated = calculate_semantic_similarity(
+        unrelated_resume,
+        job_description
+    )
+
+    assert related["semantic_source"] == "tfidf_fallback"
+    assert unrelated["semantic_source"] == "tfidf_fallback"
+    assert 0.0 <= related["semantic_score"] <= 100.0
+    assert 0.0 <= unrelated["semantic_score"] <= 100.0
+    assert related["semantic_score"] > unrelated["semantic_score"]
+    assert unrelated["semantic_score"] == 0.0
+
+
+def test_tfidf_semantic_scores_identical_text_near_maximum():
+    from app.services.embedding_service import calculate_semantic_similarity
+
+    text = (
+        "Python FastAPI SQLite Docker pytest backend API development "
+        "with reliable production monitoring."
+    )
+
+    result = calculate_semantic_similarity(
+        text,
+        text
+    )
+
+    assert result["semantic_source"] == "tfidf_fallback"
+    assert result["semantic_score"] == 100.0
+
+
+@pytest.mark.parametrize(
+    ("resume_text", "job_description"),
+    [
+        ("", "Python backend role."),
+        ("Python backend experience.", ""),
+        ("!!! ... ;;;", "??? --- !!!"),
+        ("the and or", "with for by")
+    ]
+)
+def test_tfidf_semantic_handles_empty_or_non_comparable_text(
+    resume_text,
+    job_description
+):
+    from app.services.embedding_service import calculate_semantic_similarity
+
+    result = calculate_semantic_similarity(
+        resume_text,
+        job_description
+    )
+
+    assert result["semantic_source"] == "tfidf_fallback"
+    assert result["semantic_score"] == 0.0
+    assert "no comparable text terms" in result["score_explanation"]
+
+
+def test_tfidf_semantic_is_stable_for_case_and_punctuation():
+    from app.services.embedding_service import calculate_semantic_similarity
+
+    noisy = calculate_semantic_similarity(
+        "PYTHON, FastAPI; SQL!!! Docker???",
+        "python fastapi sql docker"
+    )
+    clean = calculate_semantic_similarity(
+        "python fastapi sql docker",
+        "python fastapi sql docker"
+    )
+
+    assert noisy["semantic_source"] == "tfidf_fallback"
+    assert noisy["semantic_score"] == clean["semantic_score"]
+    assert noisy["semantic_score"] == 100.0
+
+
+def test_tfidf_semantic_does_not_score_letter_overlap_as_semantic_match():
+    from app.services.embedding_service import calculate_semantic_similarity
+
+    result = calculate_semantic_similarity(
+        "catering hospitality kitchen service",
+        "python api backend docker"
+    )
+
+    assert result["semantic_source"] == "tfidf_fallback"
+    assert result["semantic_score"] == 0.0
+
+
+def test_openai_embedding_error_uses_tfidf_fallback(monkeypatch):
+    from app.services import embedding_service
+
+    service = embedding_service._embedding_service
+
+    monkeypatch.setattr(
+        service,
+        "use_openai",
+        True
+    )
+    monkeypatch.setattr(
+        service,
+        "client",
+        object()
+    )
+
+    def unavailable_embedding(text):
+        raise embedding_service.OpenAIError("embedding service unavailable")
+
+    monkeypatch.setattr(
+        service,
+        "_embed_with_openai",
+        unavailable_embedding
+    )
+
+    result = embedding_service.calculate_semantic_similarity(
+        "Python FastAPI SQLite backend developer.",
+        "Hiring Python FastAPI backend engineer with SQLite."
+    )
+
+    assert result["semantic_source"] == "tfidf_fallback"
+    assert result["semantic_score"] > 0.0
+    assert "OpenAI embedding similarity was unavailable" in result["score_explanation"]
+
+
+def test_semantic_programming_errors_are_not_treated_as_fallback(monkeypatch):
+    from app.services import embedding_service
+
+    service = embedding_service._embedding_service
+
+    monkeypatch.setattr(
+        service,
+        "use_openai",
+        True
+    )
+    monkeypatch.setattr(
+        service,
+        "client",
+        object()
+    )
+    monkeypatch.setattr(
+        service,
+        "_openai_semantic_similarity",
+        lambda resume_text, job_description: (_ for _ in ()).throw(
+            TypeError("programming bug")
+        )
+    )
+
+    with pytest.raises(TypeError, match="programming bug"):
+        embedding_service.calculate_semantic_similarity(
+            "Python FastAPI backend developer.",
+            "Hiring Python FastAPI backend engineer."
+        )
+
+
+def test_match_semantic_programming_error_is_not_success(
+    isolated_database,
+    monkeypatch
+):
+    from app.main import app
+    from app.agents import recruitment_agents
+
+    def broken_semantic_score(resume_text, job_description):
+        raise TypeError("semantic programming bug")
+
+    monkeypatch.setattr(
+        recruitment_agents,
+        "calculate_semantic_similarity",
+        broken_semantic_score
+    )
+
+    with TestClient(
+        app,
+        raise_server_exceptions=False
+    ) as test_client:
+        response = post_match_with_content(
+            client=test_client,
+            filename="semantic-programming-error.txt",
+            resume_text="Python FastAPI backend developer with SQLite.",
+            job_description=(
+                "Hiring a Python FastAPI backend engineer with SQLite "
+                "and reliable API delivery experience."
+            )
+        )
+
+        assert response.status_code == 500
+        assert test_client.get("/history").json()["data"] == []
+
+
+def test_match_and_history_include_tfidf_semantic_score(client):
+    response = post_match_with_content(
+        client=client,
+        filename="semantic-fallback.txt",
+        resume_text=(
+            "Built Python FastAPI backend APIs with SQLite persistence, "
+            "Docker deployment, Git workflows, and pytest coverage."
+        ),
+        job_description=(
+            "We need a Python FastAPI backend engineer with SQLite, "
+            "Docker, Git, and automated testing experience."
+        )
+    )
+
+    assert response.status_code == 200
+
+    result = response.json()["data"]
+
+    assert result["semantic_source"] == "tfidf_fallback"
+    assert 0.0 <= result["semantic_score"] <= 100.0
+    assert result["semantic_score"] > 0.0
+    assert "TF-IDF" in result["score_explanation"]
+    assert 0.0 <= result["match_score"] <= 1.0
+
+    history_response = client.get("/history")
+    assert history_response.status_code == 200
+
+    history = history_response.json()["data"]
+
+    assert history[0]["filename"] == "semantic-fallback.txt"
+    assert history[0]["semantic_score"] == result["semantic_score"]
+    assert history[0]["semantic_source"] == "tfidf_fallback"
+
+
 def test_match_persists_history_row_and_returns_it(
     client,
     monkeypatch

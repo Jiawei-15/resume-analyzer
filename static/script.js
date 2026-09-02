@@ -66,6 +66,10 @@ form.addEventListener("submit", async (e) => {
             100
         );
 
+        const semanticScorePercent = normalizeScorePercent(
+            data.semantic_score
+        );
+        const semanticSource = data.semantic_source || "unknown";
         const matchedSkills =
             data.dynamic_matched_skills
             || data.matched_skills
@@ -163,6 +167,8 @@ form.addEventListener("submit", async (e) => {
                     <div class="result-section">
                         <h3>Overall Scores</h3>
                         <p><strong>Dynamic Match:</strong> ${scorePercent}%</p>
+                        <p><strong>Semantic Score:</strong> ${semanticScorePercent}%</p>
+                        <p><strong>Semantic Source:</strong> ${escapeHTML(semanticSource)}</p>
                         <p><strong>Matched Requirements:</strong> ${matchedSkills.length}</p>
                         <p><strong>Missing Requirements:</strong> ${missingSkills.length}</p>
                         <p><strong>LLM Fallback Used:</strong> ${escapeHTML(String(usedFallback ?? "unknown"))}</p>
@@ -315,13 +321,14 @@ historyButton.addEventListener("click", async () => {
                 <h3>Recent History</h3>
                 ${records.map(record => {
             const matchScore = getNumber(record.match_score, 0);
-            const semanticScore = getNumber(record.semantic_score, 0);
-
+            const semanticScorePercent = normalizeScorePercent(
+                record.semantic_score
+            );
             return `
                         <div class="history-item">
                             <p><strong>File:</strong> ${escapeHTML(record.filename || "Unknown file")}</p>
                             <p><strong>Match Score:</strong> ${Math.round(matchScore * 100)}%</p>
-                            <p><strong>Semantic Score:</strong> ${Math.round(semanticScore * 100)}%</p>
+                            <p><strong>Semantic Score:</strong> ${semanticScorePercent}%</p>
                             <p><strong>Source:</strong> ${escapeHTML(record.semantic_source || "unknown")}</p>
                             <p><strong>Matched:</strong> ${escapeHTML(formatList(record.matched_skills))}</p>
                             <p><strong>Missing:</strong> ${escapeHTML(formatList(record.missing_skills))}</p>
@@ -350,6 +357,23 @@ function clampNumber(value, min, max) {
     return Math.min(Math.max(value, min), max);
 }
 
+function normalizeScorePercent(value) {
+    const score = getNumber(value, 0);
+
+    if (score >= 0 && score <= 1) {
+        return clampNumber(
+            Math.round(score * 100),
+            0,
+            100
+        );
+    }
+
+    return clampNumber(
+        Math.round(score),
+        0,
+        100
+    );
+}
 function buildScoreExplanation(scorePercent, matchedSkills, missingSkills) {
     if (scorePercent >= 75) {
         return "Strong alignment. The resume shows clear overlap with the target role.";
