@@ -1,6 +1,6 @@
 # AI Recruitment Copilot
 
-A full-stack AI-powered recruitment and resume matching application built with **FastAPI**, **OpenAI API**, **embeddings**, **multi-agent workflow orchestration**, **SQLite**, and a vanilla **HTML/CSS/JavaScript** frontend.
+A full-stack AI-powered recruitment and resume matching application built with **FastAPI**, **OpenAI API**, **request-scoped retrieval**, **local SQLite history**, and a vanilla **HTML/CSS/JavaScript** frontend.
 
 The application allows users to upload a resume, paste a target job description, and receive a structured AI-generated report that includes:
 
@@ -19,16 +19,17 @@ This project was built as a portfolio AI engineering project focused on **LLM ap
 
 ## Live Demo
 
-https://resume-analyzer-6pdw.onrender.com
+No canonical hosted URL is asserted by this repository. The app can be deployed with the included Render blueprint or Dockerfile.
 
 ---
 
 ## Project Highlights
 
 * Refactored a traditional resume analyzer into a **multi-agent AI recruitment copilot**
-* Integrated **OpenAI Chat Completions** for structured job and resume analysis
-* Integrated **OpenAI Embeddings** for resume evidence retrieval
-* Built a lightweight **in-memory vector search pipeline**
+* Uses **OpenAI Chat Completions** for structured job and resume analysis when a valid API key is configured
+* Uses the **OpenAI Responses API** for AI-generated resume rewrite suggestions
+* Supports **OpenAI Embeddings** for evidence retrieval, with local word-level vector retrieval when embeddings are disabled
+* Built a lightweight request-scoped **in-memory vector search pipeline**
 * Implemented a modular **agent orchestration layer**
 * Added AI-generated resume rewrite suggestions based on job gaps
 * Updated frontend rendering to support dynamic AI output
@@ -97,8 +98,8 @@ The project includes a lightweight retrieval pipeline:
 ```text
 resume text
 → chunking
-→ embedding generation
-→ in-memory vector storage
+→ OpenAI embeddings or local word-level vector generation
+→ request-scoped in-memory vector storage
 → similarity search
 → retrieved resume evidence
 ```
@@ -117,7 +118,7 @@ The system generates targeted improvement suggestions, such as:
 
 ### Analysis History
 
-The application stores match history in a local SQLite database and exposes a `/history` endpoint for recent analyses.
+The application stores match history in a local SQLite database and exposes a `/history` endpoint for recent analyses. The database path is configurable and defaults to `history.db` for local development.
 
 ### Testing
 
@@ -132,10 +133,10 @@ The project includes pytest-based API tests for:
 * Unsupported file validation
 * History endpoint
 
-Current local test result:
+Current test suite result:
 
 ```text
-9 passed
+43 passed
 ```
 
 ---
@@ -148,8 +149,10 @@ Current local test result:
 * FastAPI
 * Uvicorn
 * OpenAI API
-* OpenAI Chat Completions
+* OpenAI Chat Completions for structured profile extraction
+* OpenAI Responses API for rewrite suggestions
 * OpenAI Embeddings
+* scikit-learn TF-IDF for local lexical similarity fallback
 * SQLite
 * Pydantic
 * pypdf
@@ -163,7 +166,8 @@ Current local test result:
 * Resume-job requirement matching
 * Embedding-based evidence retrieval
 * LLM-generated resume rewrite suggestions
-* Rule-based fallback behavior
+* Rule-based rewrite fallback behavior
+* `tfidf_fallback` lexical similarity when OpenAI embedding similarity is unavailable
 
 ### Frontend
 
@@ -208,6 +212,7 @@ AI Recruitment Copilot/
 │   │   ├── embedding_service.py
 │   │   ├── job_profile_service.py
 │   │   ├── llm_service.py
+│   │   ├── openai_retry.py
 │   │   ├── resume_service.py
 │   │   └── vector_store.py
 │   │
@@ -310,12 +315,12 @@ The `/match` endpoint returns a structured report containing:
 4. The job description is sent to the Job Analysis Agent.
 5. The resume text is sent to the Resume Analysis Agent.
 6. Resume text is split into chunks.
-7. Embeddings are generated for resume chunks and the job description.
+7. OpenAI embeddings or local word-level vectors are generated for resume chunks and the job description.
 8. Relevant resume evidence is retrieved through vector similarity search.
 9. The Match Diagnosis Agent compares job requirements and resume capabilities.
 10. The LLM Resume Rewrite Agent generates improvement suggestions.
 11. The frontend displays the full report, including score, evidence, gaps, suggestions, and agent trace.
-12. The result is optionally saved to SQLite history.
+12. The result is saved to local SQLite history.
 
 ---
 
@@ -356,13 +361,22 @@ Recruitment Orchestrator
 Create a local `.env` file based on `.env.example`.
 
 ```env
+APP_NAME="AI Recruitment Copilot"
+DEBUG=True
 OPENAI_API_KEY=your_api_key_here
-USE_OPENAI_EMBEDDINGS=True
+USE_OPENAI_EMBEDDINGS=False
+AI_RECRUITMENT_COPILOT_DB_PATH=history.db
+AI_RECRUITMENT_COPILOT_MAX_UPLOAD_BYTES=5242880
+AI_RECRUITMENT_COPILOT_MAX_RESUME_TEXT_CHARS=100000
+AI_RECRUITMENT_COPILOT_MAX_JOB_DESCRIPTION_CHARS=20000
+AI_RECRUITMENT_COPILOT_OPENAI_TIMEOUT_SECONDS=20
+AI_RECRUITMENT_COPILOT_OPENAI_MAX_RETRIES=1
+AI_RECRUITMENT_COPILOT_OPENAI_RETRY_BACKOFF_SECONDS=0.25
 ```
 
 Do not commit your real `.env` file to GitHub.
 
-The application includes fallback handling when the OpenAI service is unavailable, but the full AI workflow is designed to run with a valid OpenAI API key.
+With a valid OpenAI API key, structured job/resume extraction can use Chat Completions, rewrite suggestions use the Responses API, and evidence retrieval can use OpenAI Embeddings when `USE_OPENAI_EMBEDDINGS=True`. Without OpenAI embeddings, the app uses local word-level vectors for retrieval and reports `tfidf_fallback` for the lexical resume/JD similarity score. The TF-IDF fallback is not an external embedding model.
 
 ---
 
@@ -371,8 +385,8 @@ The application includes fallback handling when the OpenAI service is unavailabl
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/Jiawei-15/resume-analyzer.git
-cd resume-analyzer
+git clone https://github.com/Jiawei-15/ai-recruitment-copilot.git
+cd ai-recruitment-copilot
 ```
 
 ### 2. Create and activate a virtual environment
@@ -434,7 +448,7 @@ pytest
 Expected result:
 
 ```text
-9 passed
+43 passed
 ```
 
 ---
@@ -463,7 +477,7 @@ http://127.0.0.1:10000
 
 ## Deployment
 
-This project includes a `render.yaml` file for Render deployment.
+This project includes a `render.yaml` file for Render deployment. The blueprint service name is `ai-recruitment-copilot`; changing this file does not automatically rename an already-created Render service.
 
 The application is configured to start with:
 
@@ -471,7 +485,7 @@ The application is configured to start with:
 uvicorn app.main:app --host 0.0.0.0 --port 10000
 ```
 
-For deployment, environment variables should be configured in the hosting platform instead of committing them to the repository.
+For deployment, environment variables should be configured in the hosting platform instead of committing them to the repository. The default SQLite database is a single local file, so Render free or temporary filesystems should not be treated as reliable long-term history storage.
 
 ---
 
@@ -504,12 +518,12 @@ LLM Fallback Used: false
 
 ## Current Limitations
 
-* The current vector store is in-memory and designed for demo use.
+* The current vector store is request-scoped, in-memory, and designed for demo use.
 * Match scoring is useful for guidance, but it should not replace human resume review.
 * AI extraction results may vary slightly depending on the job description and resume wording.
 * Long resumes and complex job descriptions may increase response time because multiple LLM and embedding calls are used.
 * The current retrieval pipeline retrieves general resume evidence, but requirement-level evidence mapping is a planned improvement.
-* SQLite is used for local/demo history storage and is not intended as a production-scale database.
+* SQLite is used for local/demo history storage and is not intended as a production-scale or reliable cloud database.
 
 ---
 
@@ -519,7 +533,6 @@ Planned improvements include:
 
 * Requirement-level evidence mapping
 * Weighted must-have vs nice-to-have job requirement scoring
-* Mock OpenAI services for faster and more stable CI tests
 * Caching embeddings to reduce repeated API calls
 * Async or optional resume rewrite generation for faster user experience
 * Better support for enterprise job description parsing
@@ -540,7 +553,7 @@ This project demonstrates practical experience with:
 * Resume-job matching logic
 * API response design
 * Frontend-backend integration
-* SQLite persistence
+* Local SQLite history storage
 * pytest API testing
 * Deployment-oriented project structure
 
