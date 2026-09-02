@@ -5,12 +5,26 @@ from typing import Any, Dict
 from fastapi import UploadFile, HTTPException
 
 from app.agents.orchestrator import RecruitmentOrchestrator
+from app.config import get_max_resume_text_chars
 
 try:
     from app.database import save_analysis
 except ImportError:
     save_analysis = None
 
+
+
+def validate_resume_text_limit(resume_text: str) -> None:
+    max_chars = get_max_resume_text_chars()
+
+    if len(resume_text) > max_chars:
+        raise HTTPException(
+            status_code=413,
+            detail=(
+                "Extracted resume text is too long. "
+                f"Maximum length is {max_chars} characters."
+            )
+        )
 
 ALLOWED_EXTENSIONS = {
     ".pdf",
@@ -52,6 +66,8 @@ def analyze_resume_logic(
         file=file,
         content=content
     )
+
+    validate_resume_text_limit(resume_text)
 
     if not resume_text.strip():
         raise HTTPException(
@@ -99,6 +115,8 @@ def match_resume_logic(
         file=file,
         content=content
     )
+
+    validate_resume_text_limit(resume_text)
 
     if not resume_text.strip():
         raise HTTPException(
@@ -299,6 +317,12 @@ def extract_text_from_pdf(content: bytes) -> str:
 
         return "\n".join(pages)
 
+    except Exception as exc:
+        raise HTTPException(
+            status_code=400,
+            detail="Could not parse uploaded PDF file."
+        ) from exc
+
     finally:
         if os.path.exists(temp_path):
             os.remove(temp_path)
@@ -337,6 +361,12 @@ def extract_text_from_docx(content: bytes) -> str:
         ]
 
         return "\n".join(paragraphs)
+
+    except Exception as exc:
+        raise HTTPException(
+            status_code=400,
+            detail="Could not parse uploaded DOCX file."
+        ) from exc
 
     finally:
         if os.path.exists(temp_path):

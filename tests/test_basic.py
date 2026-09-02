@@ -506,6 +506,489 @@ def test_vector_store_requires_explicit_namespace():
         )
 
 
+def test_upload_allows_file_exactly_at_configured_size_limit(
+    client,
+    monkeypatch
+):
+    content = b"x" * 64
+    monkeypatch.setenv(
+        "AI_RECRUITMENT_COPILOT_MAX_UPLOAD_BYTES",
+        str(len(content))
+    )
+
+    response = client.post(
+        "/upload",
+        files={
+            "file": (
+                "limit.txt",
+                content,
+                "text/plain"
+            )
+        }
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"]["size"] == len(content)
+
+
+def test_upload_rejects_file_one_byte_over_configured_size_limit(
+    client,
+    monkeypatch
+):
+    monkeypatch.setenv(
+        "AI_RECRUITMENT_COPILOT_MAX_UPLOAD_BYTES",
+        "64"
+    )
+
+    response = client.post(
+        "/upload",
+        files={
+            "file": (
+                "too-large.txt",
+                b"x" * 65,
+                "text/plain"
+            )
+        }
+    )
+
+    assert response.status_code == 413
+    assert "maximum size is 64 bytes" in response.json()["detail"].lower()
+
+
+def test_upload_stream_without_content_length_is_still_limited(monkeypatch):
+    import asyncio
+    from fastapi import HTTPException
+    from app.routers.resume import read_upload_content_with_limit
+
+    class ChunkedUpload:
+        def __init__(self, content):
+            self.content = content
+
+        async def read(self, size=-1):
+            if not self.content:
+                return b""
+
+            if size is None or size < 0:
+                size = len(self.content)
+
+            chunk = self.content[:size]
+            self.content = self.content[size:]
+            return chunk
+
+    monkeypatch.setenv(
+        "AI_RECRUITMENT_COPILOT_MAX_UPLOAD_BYTES",
+        "4"
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(
+            read_upload_content_with_limit(
+                ChunkedUpload(b"12345")
+            )
+        )
+
+    assert exc_info.value.status_code == 413
+
+
+def test_job_description_allows_exact_configured_character_limit(
+    client,
+    monkeypatch
+):
+    job_description = "Python FastAPI backend developer role"
+    monkeypatch.setenv(
+        "AI_RECRUITMENT_COPILOT_MAX_JOB_DESCRIPTION_CHARS",
+        str(len(job_description))
+    )
+    install_fake_orchestrator(
+        monkeypatch,
+        [
+            {
+                "match_score": 1.0,
+                "semantic_score": 88.0,
+                "semantic_source": "unit_test_semantic",
+                "score_explanation": "Within JD limit.",
+                "matched_skills": ["Python"],
+                "missing_skills": [],
+                "feedback": ["Within limit."]
+            }
+        ]
+    )
+
+    response = post_match_with_content(
+        client=client,
+        filename="jd-limit.txt",
+        resume_text="Python FastAPI backend developer.",
+        job_description=job_description
+    )
+
+    assert response.status_code == 200
+
+
+def test_job_description_rejects_one_character_over_limit(
+    client,
+    monkeypatch
+):
+    job_description = "Python FastAPI backend developer role"
+    monkeypatch.setenv(
+        "AI_RECRUITMENT_COPILOT_MAX_JOB_DESCRIPTION_CHARS",
+        str(len(job_description) - 1)
+    )
+
+    response = post_match_with_content(
+        client=client,
+        filename="jd-too-long.txt",
+        resume_text="Python FastAPI backend developer.",
+        job_description=job_description
+    )
+
+    assert response.status_code == 413
+    assert "job description is too long" in response.json()["detail"].lower()
+
+
+def test_analyze_allows_resume_text_exactly_at_configured_limit(
+    client,
+    monkeypatch
+):
+    resume_text = "Python FastAPI developer."
+    monkeypatch.setenv(
+        "AI_RECRUITMENT_COPILOT_MAX_RESUME_TEXT_CHARS",
+        str(len(resume_text))
+    )
+
+    response = client.post(
+        "/analyze",
+        files={
+            "file": (
+                "resume-limit.txt",
+                resume_text.encode("utf-8"),
+                "text/plain"
+            )
+        }
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"]["summary"]["text_length"] == len(resume_text)
+
+
+def test_match_rejects_resume_text_one_character_over_limit(
+    client,
+    monkeypatch
+):
+    monkeypatch.setenv(
+        "AI_RECRUITMENT_COPILOT_MAX_RESUME_TEXT_CHARS",
+        "10"
+    )
+
+    response = post_match_with_content(
+        client=client,
+        filename="resume-too-long.txt",
+        resume_text="x" * 11,
+        job_description=(
+            "We are hiring a Python FastAPI backend developer with "
+            "SQLite and Docker experience."
+        )
+    )
+
+    assert response.status_code == 413
+    assert "resume text is too long" in response.json()["detail"].lower()
+
+
+def test_forged_pdf_extension_returns_clear_400(client):
+    response = client.post(
+        "/analyze",
+        files={
+            "file": (
+                "not-a-real-pdf.pdf",
+                b"this is not a pdf",
+                "application/pdf"
+            )
+        }
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Could not parse uploaded PDF file."
+
+
+def test_empty_txt_resume_still_returns_clear_400(client):
+    response = client.post(
+        "/analyze",
+        files={
+            "file": (
+                "empty.txt",
+                b"",
+                "text/plain"
+            )
+        }
+    )
+
+    assert response.status_code == 400
+    assert "could not extract text" in response.json()["detail"].lower()
+
+
+def test_openai_clients_use_configured_timeout_and_disable_sdk_retries(
+    monkeypatch
+):
+    from types import SimpleNamespace
+    from app.services import ai_skill_service, embedding_service, llm_service
+
+    created_clients = []
+
+    class FakeEmbeddings:
+        def create(self, **kwargs):
+            return SimpleNamespace(
+                data=[SimpleNamespace(embedding=[1.0, 0.0])]
+            )
+
+    class FakeResponses:
+        def create(self, **kwargs):
+            return SimpleNamespace(
+                output_text='{"rewrite_suggestions": []}'
+            )
+
+    class FakeCompletions:
+        def create(self, **kwargs):
+            return SimpleNamespace(
+                choices=[
+                    SimpleNamespace(
+                        message=SimpleNamespace(content='{"required_skills": ["Python"]}')
+                    )
+                ]
+            )
+
+    class FakeChat:
+        def __init__(self):
+            self.completions = FakeCompletions()
+
+    class FakeOpenAI:
+        def __init__(self, **kwargs):
+            created_clients.append(kwargs)
+            self.embeddings = FakeEmbeddings()
+            self.responses = FakeResponses()
+            self.chat = FakeChat()
+
+    monkeypatch.setenv("USE_OPENAI_EMBEDDINGS", "True")
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    monkeypatch.setenv(
+        "AI_RECRUITMENT_COPILOT_OPENAI_TIMEOUT_SECONDS",
+        "7.5"
+    )
+    monkeypatch.setattr(
+        embedding_service,
+        "OpenAI",
+        FakeOpenAI
+    )
+    monkeypatch.setattr(
+        llm_service,
+        "OpenAI",
+        FakeOpenAI
+    )
+    monkeypatch.setattr(
+        ai_skill_service,
+        "OpenAI",
+        FakeOpenAI
+    )
+    monkeypatch.setattr(
+        ai_skill_service,
+        "OPENAI_API_KEY",
+        "sk-test"
+    )
+
+    embedding = embedding_service.EmbeddingService()
+    embedding._embed_with_openai("Python")
+    llm_service.LLMService().generate_resume_rewrite_suggestions(
+        resume_text="Python developer.",
+        job_description="Python backend role.",
+        evidence_map=[],
+        weak_matches=[],
+        missing_matches=[]
+    )
+    ai_skill_service._call_openai_json("{}")
+
+    assert len(created_clients) == 3
+
+    for kwargs in created_clients:
+        assert kwargs["timeout"] == 7.5
+        assert kwargs["max_retries"] == 0
+
+
+def test_openai_retry_retries_recoverable_errors_to_limit():
+    from httpx2 import Request
+    from openai import APITimeoutError
+    from app.services.openai_retry import call_openai_with_retries
+
+    attempts = 0
+
+    def operation():
+        nonlocal attempts
+        attempts += 1
+        raise APITimeoutError(
+            request=Request(
+                "POST",
+                "https://api.openai.test"
+            )
+        )
+
+    with pytest.raises(APITimeoutError):
+        call_openai_with_retries(
+            operation,
+            operation_name="test timeout",
+            max_retries=2,
+            backoff_seconds=0
+        )
+
+    assert attempts == 3
+
+
+def test_openai_retry_does_not_retry_unrecoverable_or_programming_errors():
+    from httpx2 import Request, Response
+    from openai import BadRequestError
+    from app.services.openai_retry import call_openai_with_retries
+
+    bad_request_attempts = 0
+    programming_attempts = 0
+
+    def invalid_request():
+        nonlocal bad_request_attempts
+        bad_request_attempts += 1
+        request = Request(
+            "POST",
+            "https://api.openai.test"
+        )
+        response = Response(
+            400,
+            request=request
+        )
+        raise BadRequestError(
+            "invalid request",
+            response=response,
+            body=None
+        )
+
+    def programming_error():
+        nonlocal programming_attempts
+        programming_attempts += 1
+        raise TypeError("programming bug")
+
+    with pytest.raises(BadRequestError):
+        call_openai_with_retries(
+            invalid_request,
+            operation_name="bad request",
+            max_retries=2,
+            backoff_seconds=0
+        )
+
+    with pytest.raises(TypeError):
+        call_openai_with_retries(
+            programming_error,
+            operation_name="programming error",
+            max_retries=2,
+            backoff_seconds=0
+        )
+
+    assert bad_request_attempts == 1
+    assert programming_attempts == 1
+
+
+def test_match_route_dispatches_sync_pipeline_to_threadpool(
+    client,
+    monkeypatch
+):
+    from app.routers import resume as resume_router
+    from starlette.concurrency import run_in_threadpool as real_run_in_threadpool
+
+    dispatched = []
+
+    async def recording_run_in_threadpool(func, *args, **kwargs):
+        dispatched.append(func.__name__)
+        return await real_run_in_threadpool(func, *args, **kwargs)
+
+    monkeypatch.setattr(
+        resume_router,
+        "run_in_threadpool",
+        recording_run_in_threadpool
+    )
+    install_fake_orchestrator(
+        monkeypatch,
+        [
+            {
+                "match_score": 1.0,
+                "semantic_score": 88.0,
+                "semantic_source": "unit_test_semantic",
+                "score_explanation": "Threadpool dispatch.",
+                "matched_skills": ["Python"],
+                "missing_skills": [],
+                "feedback": ["Threadpool dispatch."]
+            }
+        ]
+    )
+
+    response = post_match(
+        client,
+        filename="threadpool.txt"
+    )
+
+    assert response.status_code == 200
+    assert "match_resume_logic" in dispatched
+
+
+def test_openai_error_details_are_not_returned_to_client(
+    client,
+    monkeypatch
+):
+    from httpx2 import Request
+    from openai import APIConnectionError
+    from app.services import llm_service
+
+    monkeypatch.setenv(
+        "OPENAI_API_KEY",
+        "sk-test-secret"
+    )
+
+    class FakeOpenAI:
+        def __init__(self, **kwargs):
+            pass
+
+    def failing_rewrite(self, **kwargs):
+        raise APIConnectionError(
+            message="secret sk-test-secret C:\\Users\\24504\\resume.txt",
+            request=Request(
+                "POST",
+                "https://api.openai.test"
+            )
+        )
+
+    monkeypatch.setattr(
+        llm_service,
+        "OpenAI",
+        FakeOpenAI
+    )
+    monkeypatch.setattr(
+        llm_service.LLMService,
+        "generate_resume_rewrite_suggestions",
+        failing_rewrite
+    )
+
+    response = post_match_with_content(
+        client=client,
+        filename="sanitized-openai-error.txt",
+        resume_text="Python FastAPI backend developer with SQLite.",
+        job_description=(
+            "We are hiring a Python FastAPI backend developer with "
+            "SQLite, Docker, and automated testing experience."
+        )
+    )
+
+    assert response.status_code == 200
+
+    response_text = response.text
+    llm_error = response.json()["data"]["llm_error"]
+
+    assert llm_error == "OpenAI resume rewrite failed: APIConnectionError."
+    assert "sk-test-secret" not in response_text
+    assert "C:\\Users" not in response_text
+    assert "resume.txt" not in response_text
+
+
 def test_tfidf_semantic_scores_related_text_above_unrelated():
     from app.services.embedding_service import calculate_semantic_similarity
 

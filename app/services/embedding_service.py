@@ -9,6 +9,8 @@ from sklearn.feature_extraction.text import (
     HashingVectorizer,
     TfidfVectorizer
 )
+from app.config import get_openai_timeout_seconds
+from app.services.openai_retry import call_openai_with_retries
 
 
 OPENAI_EMBEDDING_MODEL = "text-embedding-3-small"
@@ -55,7 +57,11 @@ class EmbeddingService:
         self.client = None
 
         if self.use_openai and self.api_key:
-            self.client = OpenAI(api_key=self.api_key)
+            self.client = OpenAI(
+                api_key=self.api_key,
+                timeout=get_openai_timeout_seconds(),
+                max_retries=0
+            )
 
     def embed_text(self, text: str) -> List[float]:
         if not text:
@@ -67,9 +73,12 @@ class EmbeddingService:
         return self._embed_locally(text)
 
     def _embed_with_openai(self, text: str) -> List[float]:
-        response = self.client.embeddings.create(
-            model=OPENAI_EMBEDDING_MODEL,
-            input=text
+        response = call_openai_with_retries(
+            lambda: self.client.embeddings.create(
+                model=OPENAI_EMBEDDING_MODEL,
+                input=text
+            ),
+            operation_name="embeddings"
         )
 
         return response.data[0].embedding
