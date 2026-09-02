@@ -1,5 +1,7 @@
 import uuid
 
+from openai import OpenAIError
+
 from app.agents.base_agent import BaseAgent
 
 from app.services.ai_skill_service import (
@@ -11,6 +13,23 @@ from app.services.ai_skill_service import (
 from app.services.chunk_service import chunk_text
 from app.services.embedding_service import calculate_semantic_similarity, get_embedding
 from app.services.vector_store import add_embedding, clear_embeddings, search_embedding
+from app.services.openai_retry import public_openai_error_message
+
+PROGRAMMING_ERROR_TYPES = (TypeError, AttributeError, KeyError, NameError)
+
+
+def _failure_or_raise(agent: BaseAgent, exc: Exception) -> dict:
+    if isinstance(exc, PROGRAMMING_ERROR_TYPES):
+        raise exc
+
+    return agent.failure(exc)
+
+
+def _is_agent_success(agent_result: dict) -> bool:
+    return (
+        agent_result.get("success") is True
+        or agent_result.get("status") == "success"
+    )
 
 
 class JobAnalysisAgent(BaseAgent):
@@ -28,7 +47,7 @@ class JobAnalysisAgent(BaseAgent):
             return self.success(result)
 
         except Exception as e:
-            return self.failure(e)
+            return _failure_or_raise(self, e)
 
 
 class ResumeAnalysisAgent(BaseAgent):
@@ -46,7 +65,7 @@ class ResumeAnalysisAgent(BaseAgent):
             return self.success(result)
 
         except Exception as e:
-            return self.failure(e)
+            return _failure_or_raise(self, e)
 
 
 class EvidenceRetrievalAgent(BaseAgent):
@@ -98,7 +117,7 @@ class EvidenceRetrievalAgent(BaseAgent):
             return self.success(result)
 
         except Exception as e:
-            return self.failure(e)
+            return _failure_or_raise(self, e)
 
         finally:
             clear_embeddings(
@@ -120,7 +139,7 @@ class MatchDiagnosisAgent(BaseAgent):
             )
 
         except Exception as e:
-            return self.failure(e)
+            return _failure_or_raise(self, e)
 
         semantic_result = calculate_semantic_similarity(
             resume_text=state.get("resume_text", ""),
@@ -189,7 +208,7 @@ class ResumeRewriteAgent(BaseAgent):
             return self.success(result)
 
         except Exception as e:
-            return self.failure(e)
+            return _failure_or_raise(self, e)
 
     def _extract_missing_items(self, match_profile):
 
@@ -300,19 +319,27 @@ class LLMResumeRewriteAgent(BaseAgent):
         super().__init__("LLM Resume Rewrite Agent")
         self.fallback_agent = ResumeRewriteAgent()
 
+        self.initialization_error = None
+
         try:
             from app.services.llm_service import LLMService
             self.llm_service = LLMService()
-        except Exception as e:
+        except ValueError:
             self.llm_service = None
-            self.initialization_error = str(e)
+            self.initialization_error = "LLM service is not available."
+        except OpenAIError as e:
+            self.llm_service = None
+            self.initialization_error = public_openai_error_message(
+                "OpenAI resume rewrite setup failed",
+                e
+            )
 
     def run(self, state):
 
         if self.llm_service is None:
             fallback_result = self.fallback_agent.run(state)
 
-            if fallback_result.get("success", False):
+            if _is_agent_success(fallback_result):
                 fallback_result["result"]["used_fallback"] = True
                 fallback_result["result"]["llm_error"] = getattr(
                     self,
@@ -349,7 +376,7 @@ class LLMResumeRewriteAgent(BaseAgent):
             if not rewrite_suggestions:
                 fallback_result = self.fallback_agent.run(state)
 
-                if fallback_result.get("success", False):
+                if _is_agent_success(fallback_result):
                     fallback_result["result"]["used_fallback"] = True
                     fallback_result["result"]["llm_error"] = "LLM returned empty suggestions."
 
@@ -363,12 +390,15 @@ class LLMResumeRewriteAgent(BaseAgent):
 
             return self.success(result)
 
-        except Exception as e:
+        except OpenAIError as e:
             fallback_result = self.fallback_agent.run(state)
 
-            if fallback_result.get("success", False):
+            if _is_agent_success(fallback_result):
                 fallback_result["result"]["used_fallback"] = True
-                fallback_result["result"]["llm_error"] = str(e)
+                fallback_result["result"]["llm_error"] = public_openai_error_message(
+                    "OpenAI resume rewrite failed",
+                    e
+                )
 
             return fallback_result
 

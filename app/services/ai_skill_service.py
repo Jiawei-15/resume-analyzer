@@ -1,9 +1,14 @@
 import json
+import logging
 import re
 from typing import Dict, List
 
-from openai import OpenAI
-from app.config import OPENAI_API_KEY
+from openai import OpenAI, OpenAIError
+from app.config import OPENAI_API_KEY, get_openai_timeout_seconds
+from app.services.openai_retry import call_openai_with_retries
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 TECH_SKILLS = [
@@ -380,29 +385,39 @@ def _call_openai_json(prompt: str) -> dict:
     if not _has_valid_openai_key():
         return {}
 
+    client = OpenAI(
+        api_key=OPENAI_API_KEY,
+        timeout=get_openai_timeout_seconds(),
+        max_retries=0
+    )
+
     try:
-        client = OpenAI(api_key=OPENAI_API_KEY)
-
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {
-                    "role": "system",
-                    "content": "Return only valid JSON. No markdown."
-                },
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ],
-            temperature=0.1
+        response = call_openai_with_retries(
+            lambda: client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "Return only valid JSON. No markdown."
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                temperature=0.1
+            ),
+            operation_name="profile JSON extraction"
         )
-
-        content = response.choices[0].message.content
-        return _safe_json_parse(content)
-
-    except Exception:
+    except OpenAIError as exc:
+        LOGGER.warning(
+            "OpenAI profile extraction unavailable: %s.",
+            type(exc).__name__
+        )
         return {}
+
+    content = response.choices[0].message.content
+    return _safe_json_parse(content)
 
 
 def _normalize_text(text: str) -> str:

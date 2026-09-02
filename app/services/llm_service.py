@@ -3,6 +3,8 @@ import os
 from typing import Any, Dict, List
 
 from openai import OpenAI
+from app.config import get_openai_timeout_seconds
+from app.services.openai_retry import call_openai_with_retries
 
 
 class LLMService:
@@ -16,7 +18,11 @@ class LLMService:
         if not api_key:
             raise ValueError("OPENAI_API_KEY is not configured.")
 
-        self.client = OpenAI(api_key=api_key)
+        self.client = OpenAI(
+            api_key=api_key,
+            timeout=get_openai_timeout_seconds(),
+            max_retries=0
+        )
 
     def generate_resume_rewrite_suggestions(
         self,
@@ -34,10 +40,13 @@ class LLMService:
             missing_matches=missing_matches
         )
 
-        response = self.client.responses.create(
-            model="gpt-4.1-mini",
-            input=prompt,
-            temperature=0.2
+        response = call_openai_with_retries(
+            lambda: self.client.responses.create(
+                model="gpt-4.1-mini",
+                input=prompt,
+                temperature=0.2
+            ),
+            operation_name="resume rewrite"
         )
 
         output_text = response.output_text
